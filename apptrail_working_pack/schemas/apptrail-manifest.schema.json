@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apptrail.local/schema/apptrail-manifest-v1.json",
+  "title": "Apptrail Discovery Manifest v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version"],
+  "properties": {
+    "version": { "const": "1" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "description": { "type": "string", "maxLength": 2048 },
+    "icon": { "type": "string", "maxLength": 2048 },
+    "category": { "type": "string", "maxLength": 128 },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "maxLength": 2048 },
+        "method": { "enum": ["GET", "HEAD"] },
+        "expected_status": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 100, "maximum": 599 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "url"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "url": { "type": "string", "maxLength": 2048 }
+        }
+      }
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "type", "url"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "type": { "enum": ["link", "iframe", "json", "microfrontend"] },
+          "url": { "type": "string", "maxLength": 2048 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "id": "photos",
+  "name": "Photos",
+  "description": "Personal photo library",
+  "icon": "/app-icon.svg",
+  "category": "media",
+  "health": {
+    "url": "/api/health",
+    "method": "GET",
+    "expected_status": [200]
+  },
+  "actions": [
+    {
+      "id": "admin",
+      "label": "Admin",
+      "url": "/admin"
+    }
+  ]
+}

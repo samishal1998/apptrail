@@ -1,0 +1,14 @@
+services:
+  photos:
+    image: example/photos:latest
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.photos.rule: "Host(`photos.example.net`)"
+      traefik.http.services.photos.loadbalancer.server.port: "3000"
+
+      apptrail.enable: "true"
+      apptrail.id: "photos"
+      apptrail.name: "Photos"
+      apptrail.description: "Personal photo library"
+      apptrail.category: "media"
+      apptrail.manifest: "/.well-known/apptrail.json"

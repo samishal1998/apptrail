@@ -1,0 +1,22 @@
+:root,
+[data-theme="apptrail-dark"] {
+  color-scheme: dark;
+  --at-accent: #ff7a2f;
+  --at-accent-strong: #ff5f2a;
+  --at-accent-soft: #ffb15c;
+  --at-bg: #0b1220;
+  --at-bg-elevated: #101a2b;
+  --at-panel: rgba(16, 26, 43, 0.84);
+  --at-panel-strong: #111c2d;
+  --at-border: rgba(255, 255, 255, 0.09);
+  --at-text: #f7f8fb;
+  --at-text-muted: #aeb8ca;
+  --at-text-faint: #768398;
+  --at-success: #24c978;
+  --at-warning: #f4b21a;
+  --at-danger: #f45b69;
+  --at-card-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  --at-radius-control: 10px;
+  --at-radius-card: 16px;
+  --at-radius-panel: 20px;
+}

@@ -1,0 +1,11 @@
+/data/
+/apptrail
+/web/node_modules/
+/web/dist/
+/web/*.tsbuildinfo
+*.log
+/release-dist/
+/site/node_modules/
+/site/dist/
+/site/.astro/
+/apptrail_working_pack.zip

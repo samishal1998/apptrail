@@ -1,0 +1,14 @@
+services:
+  apptrail:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - apptrail-data:/data
+    restart: unless-stopped
+    # For an HTTPS reverse proxy, set your exact browser-facing origin:
+    # environment:
+    #   APPTRAIL_ORIGIN: https://apptrail.example.com
+
+volumes:
+  apptrail-data:

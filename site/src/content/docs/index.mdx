@@ -1,0 +1,65 @@
+---
+title: Your apps. A little closer.
+description: Apptrail discovers your self-hosted applications and brings them together in a dashboard that stays yours.
+template: splash
+hero:
+  title: 'Everything you host.<br /><span class="hero-accent">One place to start.</span>'
+  tagline: Your infrastructure changes. Your dashboard should keep up. Discover your apps, make room for your favorites, and find your way home.
+  actions:
+    - text: Find your starting point
+      link: ./guides/installation/
+      icon: right-arrow
+      variant: primary
+    - text: Explore the app guide
+      link: ./guides/quick-start/
+      icon: open-book
+      variant: secondary
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<div className="landing-kicker">SELF-HOSTED. PERSONAL. RIGHT WHERE IT BELONGS.</div>
+
+<figure className="workspace-preview">
+  <img src={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/images/workspace.png`} alt="Apptrail's dark dashboard with application cards, favorites, provider counts, and page controls." width="1440" height="1337" loading="eager" />
+  <figcaption>A real Apptrail workspace with illustrative apps. Your services, your layout.</figcaption>
+</figure>
+
+## A little order for your digital world.
+
+Apptrail connects the dashboard you organize with the infrastructure you actually run. New services appear in your registry. Your carefully arranged pages stay put.
+
+<CardGrid>
+  <Card title="Let your apps introduce themselves." icon="magnifier">
+    Connect Docker and pick up application metadata and Traefik routes. Use a manual entry for everything else. See where each detail came from.
+  </Card>
+  <Card title="Make room for your favorites." icon="star">
+    Create dashboard pages, choose their apps, and reorder cards. Rename, hide, or customize an icon without losing your preferences on the next scan.
+  </Card>
+  <Card title="Yours, until you choose to share." icon="padlock">
+    One owner account. Private pages by default. Publish a read-only page when you want to share a starting point with someone else.
+  </Card>
+  <Card title="A small place to call home." icon="laptop">
+    One Go executable with a React interface and a local SQLite database. No frontend server or separate database to manage.
+  </Card>
+</CardGrid>
+
+## Your next stop is one command away.
+
+Install the latest release on Linux or macOS. The installer verifies the release checksum and installs into your user's local bin directory.
+
+```sh
+curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
+```
+
+Then start your workspace:
+
+```sh
+~/.local/bin/apptrail -data "$HOME/.local/share/apptrail"
+```
+
+Open port **8080**, use the setup token printed by the server, and create your owner account. Windows downloads and container instructions are in the installation guide.
+
+<LinkCard title="Settle in." description="Install Apptrail and create your first dashboard in a few minutes." href="./guides/quick-start/" />
+
+<div className="landing-signoff">YOUR INFRASTRUCTURE. YOUR STARTING POINT.</div>

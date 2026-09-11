@@ -1,0 +1,21 @@
+[data-theme="apptrail-light"] {
+  color-scheme: light;
+  --at-accent: #ff7a2f;
+  --at-accent-strong: #e95720;
+  --at-accent-soft: #ffad60;
+  --at-bg: #f4f7fb;
+  --at-bg-elevated: #ffffff;
+  --at-panel: rgba(255, 255, 255, 0.88);
+  --at-panel-strong: #ffffff;
+  --at-border: rgba(18, 31, 52, 0.10);
+  --at-text: #111827;
+  --at-text-muted: #667085;
+  --at-text-faint: #98a2b3;
+  --at-success: #16a163;
+  --at-warning: #d99b0b;
+  --at-danger: #d84655;
+  --at-card-shadow: 0 18px 50px rgba(38, 51, 77, 0.10);
+  --at-radius-control: 10px;
+  --at-radius-card: 16px;
+  --at-radius-panel: 20px;
+}

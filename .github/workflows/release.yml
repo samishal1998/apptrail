@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build frontend
+        run: npm ci --prefix web && npm run build --prefix web
+      - name: Verify backend and installer
+        run: |
+          go test -race ./...
+          go vet ./...
+          sh -n install.sh
+          bash -n scripts/release.sh
+          node --test scripts/install.test.cjs
+      - name: Build release archives and checksums
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: bash scripts/release.sh "$VERSION"
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" --json isDraft --jq .isDraft > /tmp/release-state; then
+            [[ "$(cat /tmp/release-state)" == true ]] || { printf '%s\n' 'This release is already public; publish a new version instead.' >&2; exit 1; }
+          else
+            gh release create "$VERSION" --draft --verify-tag --generate-notes --title "Apptrail $VERSION"
+          fi
+          gh release upload "$VERSION" release-dist/* --clobber
+          if [[ "$VERSION" == *-* ]]; then
+            gh release edit "$VERSION" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$VERSION" --draft=false --latest
+          fi

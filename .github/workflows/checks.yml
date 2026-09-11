@@ -1,0 +1,30 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            site/package-lock.json
+      - run: npm ci --prefix web && npm run build --prefix web
+      - run: go test -race ./... && go vet ./...
+      - run: sh -n install.sh && bash -n scripts/release.sh && node --test scripts/install.test.cjs
+      - run: npm ci --prefix site && npm run build --prefix site

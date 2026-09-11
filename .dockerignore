@@ -1,0 +1,9 @@
+data
+apptrail
+web/node_modules
+web/dist
+*.zip
+*.log
+.git
+site
+release-dist
