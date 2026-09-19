@@ -57,6 +57,12 @@ Verify the API base URL and the authorization file. Use the path as seen by the 
 
 The API is returning additional pages beyond the bounded request. Check that an access proxy preserves `per_page=10001` and `X-Next-Page`. Snapshots exceeding 10,000 records per endpoint or 8 MiB per response are rejected; the last successful observations are retained.
 
+## Traefik shows ACME/ping/dashboard as unresolved apps, or repeats an app for each hostname
+
+Upgrade to v0.4 or later and scan the Traefik provider again. Generated internal routers are excluded, and host aliases on the same router/path are grouped into one app with alternate launch addresses. Older uncustomized internal entries are cleaned up; entries you edited or placed on a dashboard are retained as missing records.
+
+If consolidation reports conflicting overrides, edit the affected alias entries so their name, URL, icon, description, or category overrides agree, then rescan. Conflicting explicit IDs need correction in their originating provider or manifest. The failed consolidation leaves the previous records and placements intact.
+
 ## Metadata or icons are missing
 
 1. Verify the launch/icon URL from the Apptrail host, not just your browser.

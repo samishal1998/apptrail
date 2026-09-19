@@ -9,6 +9,7 @@ type App = {
   name: string;
   description: string;
   url: string;
+  urls?: string[];
   icon: string | boolean;
   category: string;
   health: string;
@@ -608,7 +609,7 @@ function Workspace({
       (filter === "Hidden" ? a.hidden : !a.hidden) &&
       (filter !== "Favorites" || a.favorite) &&
       (category === "All categories" || a.category === category) &&
-      `${a.name} ${a.description} ${a.category} ${a.url} ${(a.sources || []).map((id) => providers.find((p) => p.id === id)?.name || id).join(" ")}`
+      `${a.name} ${a.description} ${a.category} ${a.url} ${(a.urls || []).join(" ")} ${(a.sources || []).map((id) => providers.find((p) => p.id === id)?.name || id).join(" ")}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -1178,6 +1179,30 @@ function Workspace({
                               {a.hidden && <span>Hidden</span>}
                             </div>
                           </div>
+                          {(a.urls?.length || 0) > 1 && (
+                            <details className="app-addresses">
+                              <summary>
+                                {a.urls!.length - 1} alternate{" "}
+                                {a.urls!.length === 2 ? "address" : "addresses"}
+                              </summary>
+                              <ul>
+                                {a
+                                  .urls!.filter((url) => url !== a.url)
+                                  .map((url) => (
+                                    <li key={url}>
+                                      <a
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {url}
+                                        <Icon name="launch" />
+                                      </a>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </details>
+                          )}
                           <div className="card-footer">
                             <Status app={a} />
                             <button
@@ -1343,7 +1368,8 @@ function Workspace({
                               {providerTypes[p.type || "docker"].summary}
                             </span>
                             <span>
-                              <strong>{p.count}</strong> {p.count === 1 ? "observation" : "observations"}
+                              <strong>{p.count}</strong>{" "}
+                              {p.count === 1 ? "observation" : "observations"}
                             </span>
                             <span>
                               Last successful scan:{" "}
@@ -1578,6 +1604,7 @@ function Editor({
     modal.type === "items" ? modal.dashboard.items : [],
   );
   const [itemSearch, setItemSearch] = useState("");
+  const launchURLField = useRef<HTMLInputElement>(null);
   const initialProvider =
     modal.type === "provider" ? modal.provider : undefined;
   const [providerType, setProviderType] = useState<ProviderType>(
@@ -1688,6 +1715,7 @@ function Editor({
           <label>
             Launch URL
             <input
+              ref={launchURLField}
               name="url"
               type="url"
               defaultValue={a?.url}
@@ -1696,6 +1724,29 @@ function Editor({
               placeholder="https://photos.example.com"
             />
           </label>
+          {a && (a.urls?.length || 0) > 1 && (
+            <label>
+              Available launch addresses
+              <select
+                className="provider-type-select"
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value && launchURLField.current)
+                    launchURLField.current.value = e.target.value;
+                }}
+              >
+                <option value="">Choose a primary launch URL…</option>
+                {a.urls!.map((url) => (
+                  <option key={url} value={url}>
+                    {url}
+                  </option>
+                ))}
+              </select>
+              <small>
+                The primary URL is the address shown on public dashboard pages.
+              </small>
+            </label>
+          )}
           <label>
             Description
             <textarea
@@ -2060,7 +2111,7 @@ function Editor({
               .filter(
                 (a) =>
                   !a.hidden &&
-                  `${a.name} ${a.url}`
+                  `${a.name} ${a.url} ${(a.urls || []).join(" ")}`
                     .toLowerCase()
                     .includes(itemSearch.toLowerCase()),
               )

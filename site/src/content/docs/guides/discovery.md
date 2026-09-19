@@ -127,7 +127,17 @@ GET /api/entrypoints
 
 These expose active routing information from enabled providers, including file-backed configuration. Apptrail derives launch URLs from enabled HTTP routers, their entrypoints, and TLS settings, and reads available upstream health from services. Docker and API observations with the same normalized URL reconcile into the same application.
 
-Rules can combine literal `Host`, `Path`, and `PathPrefix` matchers with `&&`, `||`, and parentheses. Unsupported matchers such as `HostRegexp`, negation, and request-header constraints produce unresolved entries instead of guessed URLs. Internal API/no-op routers are ignored, and disabled routers are excluded with diagnostics.
+Rules can combine literal `Host`, `Path`, and `PathPrefix` matchers with `&&`, `||`, and parentheses. Unsupported matchers such as `HostRegexp`, negation, and request-header constraints produce unresolved entries instead of guessed URLs. Traefik-generated `internal` routers—including ACME, API, dashboard, ping, and entrypoint redirects—are ignored. Disabled application routers are excluded with diagnostics. A user-defined router exposing a dashboard with a concrete hostname can still be discovered.
+
+### Host aliases and alternate addresses
+
+In v0.4+, hostnames and entrypoints on the **same Traefik router and base path** form one application. For example, a router matching four `Host(...)` alternatives creates one card with four launch URLs. Different paths remain separate unless an explicit application identity already correlates them. Use separate routers if different hosts actually serve distinct virtual applications.
+
+The default primary address prefers HTTPS, then the configured rule/entrypoint order. Expand **alternate addresses** on an owner app card to launch another URL. In the edit dialog, **Available launch addresses** lets you choose the primary URL; saving makes it a durable owner override. Public pages receive only the primary launch URL, not the complete list of alternate addresses.
+
+On a successful scan, older duplicate alias records are consolidated transactionally. Dashboard placements retain their relative order, duplicate placements collapse, favorites are preserved, and the consolidated app stays hidden if any alias was hidden. Conflicting text/URL overrides or explicit Apptrail IDs are reported instead of being discarded; align the overrides or correct the identities before rescanning.
+
+Old generated internal-router records are removed only when they have no overrides, dashboard placements, explicit identity, or other infrastructure sources. Curated entries remain as missing records so the owner can decide whether to keep or forget them. Genuine applications that disappear are still retained normally.
 
 Traefik paginates its API. Apptrail requests one bounded page with `per_page=10001`, accepts at most 10,000 records per endpoint, and rejects a response that indicates more pages. A truncated or failed scan never marks previously observed apps missing. Access proxies must preserve the query parameters and pagination headers.
 

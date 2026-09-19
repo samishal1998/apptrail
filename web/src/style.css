@@ -1155,6 +1155,45 @@ select:focus-visible {
   border-radius: 5px;
   color: var(--at-text-muted);
 }
+.app-addresses {
+  border-top: 1px solid var(--at-border);
+}
+.app-addresses summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: list-item;
+  padding-block: 12px;
+  color: var(--at-text-muted);
+  font-size: 11px;
+}
+.app-addresses summary:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: 2px;
+}
+.app-addresses ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.app-addresses a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  color: var(--at-text-muted);
+}
+.app-addresses a:hover {
+  color: var(--at-accent);
+}
+.app-addresses .icon {
+  width: 12px;
+  height: 12px;
+  flex-basis: 12px;
+}
 .card-footer {
   border-top: 1px solid var(--at-border);
   display: flex;

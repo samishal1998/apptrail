@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -160,12 +159,7 @@ func traefikMatches(rule string) ([]routeMatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Host != out[j].Host {
-			return out[i].Host < out[j].Host
-		}
-		return out[i].Path < out[j].Path
-	})
+	// Rule order supplies the preferred hostname when several hosts are aliases.
 	return out, nil
 }
 

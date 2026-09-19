@@ -221,12 +221,15 @@ func TestTraefikDiscoveryMergingAndTruncation(t *testing.T) {
 		t.Fatal(err)
 	}
 	apps, _ := s.apps()
-	if len(apps) != 4 {
-		t.Fatalf("expected 3 resolved apps and one unresolved route: %+v", apps)
+	if len(apps) != 3 {
+		t.Fatalf("expected 2 resolved apps and one unresolved route: %+v", apps)
 	}
 	photos, err := s.app(id)
 	if err != nil || len(photos.Sources) != 2 || photos.Health != "healthy" || photos.Fields["backend"].Value != "http://photos:3000" {
 		t.Fatalf("did not merge Docker and Traefik observations: %+v (%v)", photos, err)
+	}
+	if len(photos.URLs) != 2 {
+		t.Fatalf("host aliases were not retained: %+v", photos.URLs)
 	}
 	truncated.Store(true)
 	if err = s.scan(context.Background(), p); err == nil || !strings.Contains(err.Error(), "paginated") {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 )
@@ -13,6 +14,7 @@ type traefikRouter struct {
 	Rule        string          `json:"rule"`
 	Service     string          `json:"service"`
 	Status      string          `json:"status"`
+	Provider    string          `json:"provider"`
 	EntryPoints []string        `json:"entryPoints"`
 	Using       []string        `json:"using"`
 	TLS         json.RawMessage `json:"tls"`
@@ -84,6 +86,9 @@ func traefikSnapshot(ctx context.Context, p provider) ([]observation, string, er
 	warnings := 0
 	seen := map[string]bool{}
 	for _, r := range routers {
+		if r.Provider == "internal" || strings.HasSuffix(r.Name, "@internal") {
+			continue
+		}
 		if r.Name == "" || r.Rule == "" {
 			return nil, "", fmt.Errorf("Traefik router name or rule is missing")
 		}
@@ -91,7 +96,7 @@ func traefikSnapshot(ctx context.Context, p provider) ([]observation, string, er
 			warnings++
 			continue
 		}
-		if r.Service == "api@internal" || r.Service == "noop@internal" {
+		if r.Service == "noop@internal" {
 			continue
 		}
 		name := strings.Split(r.Name, "@")[0]
@@ -197,5 +202,50 @@ func traefikSnapshot(ctx context.Context, p provider) ([]observation, string, er
 	if len(out) > maxProxyRoutes {
 		return nil, "", fmt.Errorf("Traefik discovery exceeds %d routes", maxProxyRoutes)
 	}
-	return out, routeWarning(warnings), nil
+	return groupTraefikAliases(p, out), routeWarning(warnings), nil
+}
+
+func groupTraefikAliases(p provider, observations []observation) []observation {
+	groups := map[string][]observation{}
+	order := []string{}
+	out := []observation{}
+	for _, o := range observations {
+		raw := o.Facts["url"].Value
+		if raw == "" {
+			out = append(out, o)
+			continue
+		}
+		u, _ := validURL(normalizedURL(raw))
+		source := "router:" + url.PathEscape(o.Facts["router"].Value) + "/path:" + url.PathEscape(u.EscapedPath())
+		if _, ok := groups[source]; !ok {
+			order = append(order, source)
+		}
+		groups[source] = append(groups[source], o)
+	}
+	for _, source := range order {
+		entries := groups[source]
+		// Prefer HTTPS, then keep the configured rule/entrypoint order.
+		sort.SliceStable(entries, func(i, j int) bool {
+			return strings.HasPrefix(entries[i].Facts["url"].Value, "https:") && !strings.HasPrefix(entries[j].Facts["url"].Value, "https:")
+		})
+		o := entries[0]
+		o.Source = source
+		o.AliasGroup = true
+		o.Keys = []string{"native:" + p.ID + ":" + source, "url:" + normalizedURL(o.Facts["url"].Value)}
+		entrypoints := []string{}
+		for _, entry := range entries {
+			o.URLs = appendURL(o.URLs, entry.Facts["url"].Value)
+			key := "url:" + normalizedURL(entry.Facts["url"].Value)
+			if !contains(o.Keys, key) {
+				o.Keys = append(o.Keys, key)
+			}
+			if ep := entry.Facts["entrypoint"].Value; !contains(entrypoints, ep) {
+				entrypoints = append(entrypoints, ep)
+			}
+		}
+		o.Facts["entrypoints"] = fact{strings.Join(entrypoints, ", "), 20, p.Name + " · Traefik entrypoints"}
+		// ponytail: one router/path means one app; use separate routers when host-based virtual apps are genuinely distinct.
+		out = append(out, o)
+	}
+	return out
 }

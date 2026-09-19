@@ -52,6 +52,12 @@ Publishing Apptrail links does not change authentication or network access requi
 
 Changing a page back to **Just me** blocks subsequent anonymous reads. Open public pages recheck every 30 seconds and when their browser window regains focus. Content already received by a visitor cannot be recalled.
 
+## Alternate launch addresses
+
+The owner workspace groups Traefik hostname aliases for the same router/path into one card. Expand the card's **alternate addresses** to open another hostname. To change the main link, edit the app, select an address under **Available launch addresses**, and save.
+
+Only the primary launch URL is sent to public dashboard visitors. Changing the primary URL changes the link those visitors receive.
+
 ## Favorites and search
 
 Favorites belong to the owner's app preferences. Use the **Favorites** filter to narrow a page or the registry. Search matches names, descriptions, categories, hostnames, and provider names in the owner workspace.

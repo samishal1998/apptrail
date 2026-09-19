@@ -16,14 +16,17 @@ type fact struct {
 	Source   string `json:"source"`
 }
 type observation struct {
-	Source string          `json:"source"`
-	Keys   []string        `json:"keys"`
-	Facts  map[string]fact `json:"facts"`
+	Source     string          `json:"source"`
+	Keys       []string        `json:"keys"`
+	Facts      map[string]fact `json:"facts"`
+	URLs       []string        `json:"urls,omitempty"`
+	AliasGroup bool            `json:"alias_group,omitempty"`
 }
 type application struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	URL         string          `json:"url"`
+	URLs        []string        `json:"urls"`
 	Description string          `json:"description"`
 	Icon        string          `json:"icon"`
 	Category    string          `json:"category"`
@@ -78,22 +81,36 @@ func (s *server) reconcile(provider string, observations []observation) error {
 		return err
 	}
 	defer tx.Rollback()
+	var kind string
+	err = tx.QueryRow("SELECT kind FROM providers WHERE id=?", provider).Scan(&kind)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
 	if _, err = tx.Exec("UPDATE observations SET present=0 WHERE provider=?", provider); err != nil {
 		return err
 	}
 	for _, o := range observations {
 		appID := ""
+		candidates := []string{}
 		for _, k := range o.Keys {
 			var found string
 			err = tx.QueryRow("SELECT app_id FROM identities WHERE key=?", k).Scan(&found)
 			if err != nil && err != sql.ErrNoRows {
 				return err
 			}
-			if found != "" {
-				if appID != "" && appID != found {
-					return fmt.Errorf("conflicting identities for %s; set a consistent apptrail.id", o.Source)
-				}
-				appID = found
+			if found != "" && !contains(candidates, found) {
+				candidates = append(candidates, found)
+			}
+		}
+		if len(candidates) > 0 {
+			appID = candidates[0]
+		}
+		if len(candidates) > 1 {
+			if !o.AliasGroup || kind != "traefik" {
+				return fmt.Errorf("conflicting identities for %s; set a consistent apptrail.id", o.Source)
+			}
+			if err = mergeAliasApps(tx, candidates, o.Source); err != nil {
+				return err
 			}
 		}
 		if appID == "" {
@@ -122,6 +139,11 @@ func (s *server) reconcile(provider string, observations []observation) error {
 			return err
 		}
 	}
+	if kind == "traefik" {
+		if err = pruneTraefikInternals(tx, provider); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 func (s *server) apps() ([]application, error) {
@@ -132,6 +154,7 @@ func (s *server) apps() ([]application, error) {
 	apps := []application{}
 	overrides := map[string]override{}
 	currentFacts := map[string]map[string]fact{}
+	allURLs, currentURLs := map[string][]string{}, map[string][]string{}
 	positions := map[string]int{}
 	for rows.Next() {
 		var a application
@@ -191,6 +214,12 @@ func (s *server) apps() ([]application, error) {
 				a.Seen = seen
 			}
 		}
+		for _, raw := range append(o.URLs, o.Facts["url"].Value) {
+			allURLs[a.ID] = appendURL(allURLs[a.ID], raw)
+			if present {
+				currentURLs[a.ID] = appendURL(currentURLs[a.ID], raw)
+			}
+		}
 		for key, f := range o.Facts {
 			old, ok := a.Fields[key]
 			if !ok || f.Priority >= old.Priority {
@@ -222,6 +251,14 @@ func (s *server) apps() ([]application, error) {
 		a.Name = a.Fields["name"].Value
 		a.Description = a.Fields["description"].Value
 		a.URL = a.Fields["url"].Value
+		a.URLs = appendURL([]string{}, a.URL)
+		urls := allURLs[a.ID]
+		if a.Lifecycle == "present" {
+			urls = currentURLs[a.ID]
+		}
+		for _, raw := range urls {
+			a.URLs = appendURL(a.URLs, raw)
+		}
 		a.Icon = a.Fields["icon"].Value
 		a.Category = a.Fields["category"].Value
 		if a.Category == "" {
@@ -245,6 +282,19 @@ func (s *server) apps() ([]application, error) {
 		}
 	}
 	return apps, nil
+}
+
+func appendURL(urls []string, raw string) []string {
+	key := normalizedURL(raw)
+	if key == "" {
+		return urls
+	}
+	for _, existing := range urls {
+		if normalizedURL(existing) == key {
+			return urls
+		}
+	}
+	return append(urls, raw)
 }
 func contains(items []string, id string) bool {
 	for _, v := range items {
