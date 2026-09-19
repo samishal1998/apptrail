@@ -170,8 +170,15 @@ func traefikMatches(rule string) ([]routeMatch, error) {
 }
 
 func listenerPort(address string) (int, bool) {
+	// Traefik entrypoints may explicitly select the TCP protocol, e.g. :443/tcp.
+	if len(address) >= 4 && strings.EqualFold(address[len(address)-4:], "/tcp") {
+		address = address[:len(address)-4]
+	}
 	for _, prefix := range []string{"tcp/", "tcp4/", "tcp6/"} {
 		address = strings.TrimPrefix(address, prefix)
+	}
+	if strings.Contains(address, "/") {
+		return 0, false
 	}
 	_, port, err := net.SplitHostPort(address)
 	if err != nil {

@@ -197,7 +197,7 @@ func TestTraefikDiscoveryMergingAndTruncation(t *testing.T) {
 				{"name": "off@file", "rule": "Host(`off.example.test`)", "entryPoints": []string{"web"}, "status": "disabled"},
 			}
 		case "/proxy/api/entrypoints":
-			v = []map[string]any{{"name": "secure", "address": ":8443"}, {"name": "web", "address": ":8080"}}
+			v = []map[string]any{{"name": "secure", "address": ":8443/tcp"}, {"name": "web", "address": ":8080/TCP"}}
 		case "/proxy/api/http/services":
 			v = []map[string]any{{"name": "photos@file", "status": "enabled", "loadBalancer": map[string]any{"servers": []map[string]string{{"url": "http://photos:3000"}}}, "serverStatus": map[string]string{"http://photos:3000": "UP"}}, {"name": "notes@docker", "status": "enabled"}}
 		default:
@@ -241,6 +241,11 @@ func TestTraefikDiscoveryMergingAndTruncation(t *testing.T) {
 }
 
 func TestProviderRedirectsAndRouteConstraints(t *testing.T) {
+	for _, address := range []string{"unix//tmp/proxy:443", ":443/udp"} {
+		if _, ok := listenerPort(address); ok {
+			t.Fatalf("accepted a non-TCP listener: %s", address)
+		}
+	}
 	var leaked atomic.Bool
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { leaked.Store(true); reply(w, map[string]any{}) }))
 	defer target.Close()

@@ -13,7 +13,7 @@ curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
 ~/.local/bin/apptrail service install
 ```
 
-The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.3.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
+The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.3.1 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
 
 Run `apptrail --version` to inspect the installed version. See the [installation guide](https://samishal1998.github.io/apptrail/guides/installation/) and [service guide](https://samishal1998.github.io/apptrail/guides/services/) for setup and lifecycle commands.
 
@@ -76,13 +76,13 @@ docker compose logs apptrail
 
 Compose builds the local Dockerfile. It starts from Alpine and uses the verified CLI installer to download the released Linux AMD64/ARM64 executable. Only `compose.yaml` and `Dockerfile` are needed; application source and compilers are not part of the build. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
 
-Optional Compose variables: `APPTRAIL_VERSION=v0.3.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
+Optional Compose variables: `APPTRAIL_VERSION=v0.3.1`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
 
 The same standalone Dockerfile can also be built directly:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
-docker build --build-arg APPTRAIL_VERSION=v0.3.0 -t apptrail:local .
+docker build --build-arg APPTRAIL_VERSION=v0.3.1 -t apptrail:local .
 ```
 
 The Dockerfile and Compose file are also attached to releases with checksums. The app runs in the foreground inside containers; Docker's restart policy manages its lifecycle.
