@@ -58,13 +58,14 @@ Then install and start it as a background service:
 ~/.local/bin/apptrail service install
 ```
 
-Open port **8080**, use the setup token from the data directory shown by the CLI, and create your owner account. Apptrail uses systemd on Linux and launchd on macOS. Windows Services and ready-to-pull container images are covered in the installation guide.
+Open port **8080**, use the setup token from the data directory shown by the CLI, and create your owner account. Apptrail uses systemd on Linux and launchd on macOS. Windows Services and Docker Compose are covered in the installation guide.
 
-Prefer Docker? Download the Compose file and start the prebuilt image:
+Prefer Docker? Download two files. Compose builds an Alpine image that installs the released CLI:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/compose.yaml -o compose.yaml
-docker compose up -d
+curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
+docker compose up --build -d
 ```
 
 <LinkCard title="Settle in." description="Install Apptrail and create your first dashboard in a few minutes." href="./guides/quick-start/" />

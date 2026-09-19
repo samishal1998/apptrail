@@ -56,7 +56,7 @@ Use a new version for each release. The release workflow:
 
 Prerelease tags such as `v0.3.0-rc.1` are marked as prereleases and do not replace the latest stable download or image. An existing public release is not overwritten by a rerun; a failed draft can be completed by rerunning the workflow. If only the container job fails after release publication, rerun **failed jobs** rather than the entire workflow.
 
-Container publication uses the repository's `GITHUB_TOKEN` with `packages: write`. GitHub may make a newly created package private; set the **apptrail** container package to **Public** in its package settings once, so anonymous Compose pulls work.
+Container publication uses the repository's `GITHUB_TOKEN` with `packages: write`. The published GHCR images are an additional download option; the default Compose file builds locally from the standalone Dockerfile. GitHub may make a newly created package private; set the **apptrail** container package to **Public** in its package settings once to allow anonymous image pulls.
 
 To inspect the packages locally before tagging:
 

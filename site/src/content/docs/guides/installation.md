@@ -63,23 +63,24 @@ For an automatic Windows Service, run `apptrail.exe service install` in an Admin
 
 ## Docker Compose
 
-Download just the Compose file. Docker pulls the prebuilt image; no repository clone or compiler is needed:
+Download the Compose file and its standalone Dockerfile into the same directory. Compose builds an Alpine image using the released CLI installer; no repository clone or application compiler is needed:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/compose.yaml -o compose.yaml
-docker compose up -d
+curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
+docker compose up --build -d
 docker compose logs apptrail
 ```
 
-Compose pulls `ghcr.io/samishal1998/apptrail:latest` for Linux AMD64 or ARM64, publishes port `8080`, and stores data in the `apptrail-data` named volume. The image runs as UID/GID `10001`. Docker discovery access must be configured separately; the default container does not mount the host's Docker socket.
+Compose uses `build.context: .` and passes `APPTRAIL_VERSION` to the Dockerfile. The installer downloads the matching Linux AMD64 or ARM64 binary and verifies its checksum. The container publishes port `8080` and stores data in the `apptrail-data` named volume. It runs as UID/GID `10001`. Docker discovery access must be configured separately; the default container does not mount the host's Docker socket.
 
-Set `APPTRAIL_VERSION=v0.2.0` to pin an image, `APPTRAIL_PORT=9090` to change the host port, or `APPTRAIL_ORIGIN=https://apptrail.example.com` for an HTTPS reverse proxy. These can go in a `.env` file next to `compose.yaml`.
+Set `APPTRAIL_VERSION=v0.2.0` to pin the CLI release installed into the image, `APPTRAIL_PORT=9090` to change the host port, or `APPTRAIL_ORIGIN=https://apptrail.example.com` for an HTTPS reverse proxy. These can go in a `.env` file next to `compose.yaml`.
 
-Upgrade with `docker compose pull` followed by `docker compose up -d`. Keep the same Compose project name and named volume when migrating an existing installation.
+When following `latest`, upgrade with `docker compose build --pull --no-cache` followed by `docker compose up -d`. Docker otherwise may reuse the installer layer and retain the old CLI. If you pin a version, changing `APPTRAIL_VERSION` and running `docker compose up --build -d` rebuilds that layer. Keep the same Compose project name and named volume when migrating an existing installation.
 
 ### Standalone Dockerfile
 
-If you prefer to build a local image, download only the Dockerfile:
+You can also build the same Dockerfile directly, without Compose:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile

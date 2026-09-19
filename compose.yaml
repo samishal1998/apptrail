@@ -1,6 +1,9 @@
 services:
   apptrail:
-    image: ghcr.io/samishal1998/apptrail:${APPTRAIL_VERSION:-latest}
+    build:
+      context: .
+      args:
+        APPTRAIL_VERSION: ${APPTRAIL_VERSION:-latest}
     ports:
       - "${APPTRAIL_PORT:-8080}:8080"
     volumes:

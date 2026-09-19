@@ -77,7 +77,7 @@ curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
 
 Keep your original data directory. Review release notes before upgrades; replacing a binary with an older version is not a database migration strategy. Restore a matching backup if a future schema change requires it.
 
-For Windows, follow the [service executable upgrade steps](../services/#windows--windows-services). For Docker Compose, run `docker compose pull` and `docker compose up -d`, preserving the existing project name and data volume.
+For Windows, follow the [service executable upgrade steps](../services/#windows--windows-services). For Docker Compose following `latest`, run `docker compose build --pull --no-cache` and `docker compose up -d`, preserving the existing project name and data volume. The no-cache build ensures the installer downloads the current release.
 
 ## Owner account recovery
 

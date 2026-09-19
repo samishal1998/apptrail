@@ -21,7 +21,7 @@ Or add `~/.local/bin` to your shell's `PATH`. The installer intentionally leaves
 
 ## Docker says permission denied
 
-If **pulling the Apptrail image** is denied, check that `ghcr.io/samishal1998/apptrail` is publicly accessible or authenticate to GHCR for a private mirror. This differs from discovery access to the Docker daemon described below.
+The default Compose file builds locally. If building fails before the installer runs, check access to the Docker daemon and the Alpine base image. If you explicitly use the published GHCR image instead, a pull-access error concerns registry authentication rather than application discovery.
 
 The Apptrail process cannot access the configured socket. Check the actual account/group running the service and the socket's permissions. For a container, verify the socket mount and `group_add` configuration, or use a restricted Docker API proxy.
 

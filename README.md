@@ -69,15 +69,16 @@ The server uses port **8080** by default. `-addr` and `-data` change the listen 
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/compose.yaml -o compose.yaml
-docker compose up -d
+curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
+docker compose up --build -d
 docker compose logs apptrail
 ```
 
-Compose pulls `ghcr.io/samishal1998/apptrail:latest` for Linux AMD64/ARM64; no repository clone or local build is needed. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
+Compose builds the local Dockerfile. It starts from Alpine and uses the verified CLI installer to download the released Linux AMD64/ARM64 executable. Only `compose.yaml` and `Dockerfile` are needed; application source and compilers are not part of the build. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
 
-Optional Compose variables: `APPTRAIL_VERSION=v0.2.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. Upgrade using `docker compose pull && docker compose up -d`, keeping the same project name and data volume.
+Optional Compose variables: `APPTRAIL_VERSION=v0.2.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
 
-For a custom local image, download just the standalone Dockerfile. It uses Alpine and the release installer, not the application source or compilers:
+The same standalone Dockerfile can also be built directly:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
