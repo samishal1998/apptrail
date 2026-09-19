@@ -74,6 +74,8 @@ docker compose logs apptrail
 
 Compose uses `build.context: .` and passes `APPTRAIL_VERSION` to the Dockerfile. The installer downloads the matching Linux AMD64 or ARM64 binary and verifies its checksum. The container publishes port `8080` and stores data in the `apptrail-data` named volume. It runs as UID/GID `10001`. Docker discovery access must be configured separately; the default container does not mount the host's Docker socket.
 
+See [container discovery access](../discovery/#container-discovery-access) for a Docker socket override, group permissions, and API-proxy connections. Traefik Docker-label discovery needs Docker API access rather than a Traefik config-file mount. Caddy and direct Traefik APIs can avoid file mounts in future integrations; their current support status is documented in that guide.
+
 Set `APPTRAIL_VERSION=v0.2.0` to pin the CLI release installed into the image, `APPTRAIL_PORT=9090` to change the host port, or `APPTRAIL_ORIGIN=https://apptrail.example.com` for an HTTPS reverse proxy. These can go in a `.env` file next to `compose.yaml`.
 
 When following `latest`, upgrade with `docker compose build --pull --no-cache` followed by `docker compose up -d`. Docker otherwise may reuse the installer layer and retain the old CLI. If you pin a version, changing `APPTRAIL_VERSION` and running `docker compose up --build -d` rebuilds that layer. Keep the same Compose project name and named volume when migrating an existing installation.

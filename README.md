@@ -87,6 +87,14 @@ docker build --build-arg APPTRAIL_VERSION=v0.2.0 -t apptrail:local .
 
 The Dockerfile and Compose file are also attached to releases with checksums. The app runs in the foreground inside containers; Docker's restart policy manages its lifecycle.
 
+### Discovery access from Docker
+
+Container build context does not grant runtime access to your infrastructure. The current Docker/Traefik-label provider needs either a mounted Docker socket with suitable group permissions or a restricted HTTP(S) Docker API proxy. It does not need your application Compose files or Traefik config files.
+
+Caddy exposes active JSON through its admin API (`GET /config/`, default `localhost:2019`), and Traefik exposes active routers/services through its read-only API (`GET /api/http/routers`, `GET /api/http/services`). These can avoid file mounts, but **Caddy and direct Traefik API/file discovery are planned, not implemented in v0.2**. For now, use manual apps or explicit `apptrail.url` Docker labels for routes the label parser cannot discover.
+
+The [discovery guide](https://samishal1998.github.io/apptrail/guides/discovery/#container-discovery-access) includes a working socket-mount override, group setup, container networking details, and clearly marked future file-mount examples. Caddy's default loopback admin listener is not reachable from another container simply by sharing a Docker network.
+
 ## First steps
 
 1. **Providers → Connect provider:** choose a Docker Unix socket or HTTP(S) API endpoint, then **Scan now**.

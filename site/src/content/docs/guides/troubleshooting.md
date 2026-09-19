@@ -39,6 +39,12 @@ Find it in **Discover**. Add an explicit `apptrail.url` label or edit its launch
 
 The initial Traefik parser supports `Host` and an optional `PathPrefix` conjunction. More complex expressions are not guessed. Container port mappings alone are not treated as public browser URLs.
 
+## I mounted a Caddyfile or Traefik config, but nothing was discovered
+
+Apptrail v0.2 does not yet implement those file providers or direct Caddy/Traefik API discovery. The current Traefik integration reads labels through the Docker API. Add an explicit `apptrail.url` label to the app's Docker container, or create a manual app entry.
+
+Both proxies expose APIs that can avoid config mounts in future integrations. See [Caddy and Traefik APIs](../discovery/#caddy-and-traefik-apis) for endpoints and container networking requirements. `localhost` inside Apptrail is not the host or another container; sharing a network also does not make another container's loopback-only listener reachable.
+
 ## Metadata or icons are missing
 
 1. Verify the launch/icon URL from the Apptrail host, not just your browser.

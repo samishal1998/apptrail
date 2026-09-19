@@ -17,6 +17,8 @@ unix:///var/run/docker.sock
 
 For a remote or restricted proxy endpoint, use its HTTP(S) URL instead. Enable the provider, save it, and choose **Scan now**.
 
+If Apptrail runs in Docker, first give its container [Docker API access](../discovery/#container-discovery-access) through a restricted API proxy or a socket mount with the correct group permissions. Downloading the Compose deployment files alone does not grant infrastructure access.
+
 Apptrail reads containers, Docker health, and Apptrail/Traefik labels. It does not start, stop, or deploy containers. See [Docker discovery](../discovery/) for access requirements and supported routing rules.
 
 ### Add a manual app
