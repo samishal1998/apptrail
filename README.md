@@ -10,12 +10,45 @@ Linux and macOS (AMD64 or ARM64):
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
-~/.local/bin/apptrail -data "$HOME/.local/share/apptrail"
+~/.local/bin/apptrail service install
 ```
 
-The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.1.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
+The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.2.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
 
-Run `apptrail --version` to inspect the installed version. See the [installation guide](https://samishal1998.github.io/apptrail/guides/installation/) and [hosting guide](https://samishal1998.github.io/apptrail/guides/hosting/) for setup, services, upgrades, and backups.
+Run `apptrail --version` to inspect the installed version. See the [installation guide](https://samishal1998.github.io/apptrail/guides/installation/) and [service guide](https://samishal1998.github.io/apptrail/guides/services/) for setup and lifecycle commands.
+
+## Native background service
+
+Apptrail 0.2+ uses the operating system's service manager:
+
+```sh
+apptrail service install
+apptrail service status
+apptrail service restart
+apptrail service stop
+apptrail service start
+apptrail service uninstall
+```
+
+Install enables and starts the service. Uninstall removes the service registration, preserving the executable and data. Use a permanent executable location before installing.
+
+| Platform | Service | Default data directory |
+| --- | --- | --- |
+| Linux | systemd **user** service, without sudo | `$XDG_DATA_HOME/apptrail` or `~/.local/share/apptrail` |
+| macOS | launchd LaunchAgent, starts at login | `~/Library/Application Support/Apptrail` |
+| Windows | Automatic Windows Service as LocalService; Administrator terminal required | `%ProgramData%\Apptrail` |
+
+To adopt an existing instance, stop the foreground process and supply its existing data directory:
+
+```sh
+apptrail service install -addr 0.0.0.0:8080 -data /absolute/path/to/data -origin https://apptrail.example.com
+```
+
+`-origin` is optional and defaults to `APPTRAIL_ORIGIN` during installation. Configuration is saved in the native service definition. Linux users can enable boot-before-login with `loginctl enable-linger "$USER"`. macOS installation needs a logged-in desktop session. Windows copies the executable into `%ProgramFiles%\Apptrail`; uninstall the existing service before reinstalling to update its executable or arguments.
+
+Linux logs: `journalctl --user -u apptrail -f`. macOS and Windows logs: `apptrail.log` inside the configured data directory. Their file logs are append-only; manage rotation externally for high-volume deployments. The setup token is in that directory's `setup-token` file.
+
+Existing user-written systemd/launchd definitions are not overwritten. Back them up and remove the old definition before adopting CLI management. Linux without systemd can use the foreground server or Docker Compose.
 
 ## Run locally
 
@@ -35,11 +68,23 @@ The server uses port **8080** by default. `-addr` and `-data` change the listen 
 ### Container
 
 ```sh
-docker compose up --build -d
+curl -fsSL https://samishal1998.github.io/apptrail/compose.yaml -o compose.yaml
+docker compose up -d
 docker compose logs apptrail
 ```
 
-The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
+Compose pulls `ghcr.io/samishal1998/apptrail:latest` for Linux AMD64/ARM64; no repository clone or local build is needed. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
+
+Optional Compose variables: `APPTRAIL_VERSION=v0.2.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. Upgrade using `docker compose pull && docker compose up -d`, keeping the same project name and data volume.
+
+For a custom local image, download just the standalone Dockerfile. It uses Alpine and the release installer, not the application source or compilers:
+
+```sh
+curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
+docker build --build-arg APPTRAIL_VERSION=v0.2.0 -t apptrail:local .
+```
+
+The Dockerfile and Compose file are also attached to releases with checksums. The app runs in the foreground inside containers; Docker's restart policy manages its lifecycle.
 
 ## First steps
 
@@ -95,7 +140,7 @@ For an HTTPS reverse proxy, configure the exact public origin:
 APPTRAIL_ORIGIN=https://apptrail.example.com ./apptrail
 ```
 
-This also enables Secure session cookies. Serve the UI and API on the same origin and preserve the original Host header. Forwarded headers are not implicitly trusted. Direct HTTP works for the Tailscale preview; use HTTPS when serving the application outside a trusted encrypted network.
+This also enables Secure session cookies. `-origin https://apptrail.example.com` is the equivalent CLI option. Serve the UI and API on the same origin and preserve the original Host header. Forwarded headers are not implicitly trusted. Direct HTTP works for the Tailscale preview; use HTTPS when serving the application outside a trusted encrypted network.
 
 ### Recover the owner password
 
@@ -145,7 +190,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Use a new semantic version for each release. Tags with a prerelease suffix are marked as prereleases. The workflow verifies the project, builds five platform archives, uploads `SHA256SUMS` and the installer, and only then publishes the draft release. An already published release is never overwritten.
+Use a new semantic version for each release. Tags with a prerelease suffix are marked as prereleases. The workflow verifies the project, builds five platform archives, uploads `SHA256SUMS`, the installer, Dockerfile, and Compose file, and only then publishes the draft release. A dependent job builds release-backed AMD64/ARM64 images, pushes versioned tags to GHCR, verifies startup, and promotes stable releases to `latest`. An already published release is never overwritten; rerun only failed jobs if container publication needs retrying.
 
 Local packaging and installer checks:
 

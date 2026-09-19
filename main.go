@@ -73,91 +73,134 @@ INSERT OR IGNORE INTO dashboards(id,name,slug) VALUES('home','Overview','home');
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "service" {
+		if err := serviceCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	showVersion := flag.Bool("version", false, "Print the Apptrail version and exit")
 	addr := flag.String("addr", "0.0.0.0:8080", "HTTP listen address")
 	data := flag.String("data", "data", "Persistent data directory")
+	origin := flag.String("origin", os.Getenv("APPTRAIL_ORIGIN"), "Browser-facing origin (or APPTRAIL_ORIGIN)")
 	reset := flag.Bool("reset-password", false, "Reset owner password from APPTRAIL_NEW_PASSWORD and revoke sessions")
+	flag.Usage = func() {
+		fmt.Fprint(flag.CommandLine.Output(), "Usage: apptrail [flags]\n       apptrail service <install|start|stop|restart|status|uninstall> [flags]\n\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *showVersion {
 		fmt.Printf("Apptrail %s\n", version)
 		return
 	}
-	if err := os.MkdirAll(*data, 0700); err != nil {
-		log.Fatal(err)
-	}
-	db, err := openStore(filepath.Join(*data, "apptrail.db"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
 	if *reset {
-		p := os.Getenv("APPTRAIL_NEW_PASSWORD")
-		if len(p) < 12 || len(p) > 72 {
-			log.Fatal("APPTRAIL_NEW_PASSWORD must contain 12–72 bytes")
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
-		if err != nil {
-			log.Fatal(err)
-		}
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatal(err)
-		}
-		res, err := tx.Exec("UPDATE owner SET password=? WHERE id=1", string(hash))
-		if err != nil {
-			log.Fatal(err)
-		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			log.Fatal("Owner has not been set up")
-		}
-		if _, err = tx.Exec("DELETE FROM sessions"); err != nil {
-			log.Fatal(err)
-		}
-		if err = tx.Commit(); err != nil {
+		if err := resetPassword(*data, os.Getenv("APPTRAIL_NEW_PASSWORD")); err != nil {
 			log.Fatal(err)
 		}
 		log.Print("Owner password changed; all sessions revoked")
 		return
 	}
-	s := &server{db: db, origin: strings.TrimRight(os.Getenv("APPTRAIL_ORIGIN"), "/"), attempts: make(map[string]attempt)}
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM owner").Scan(&count); err != nil {
+	if err := runManagedServer(*addr, *data, *origin); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func resetPassword(data, password string) error {
+	if len(password) < 12 || len(password) > 72 {
+		return fmt.Errorf("APPTRAIL_NEW_PASSWORD must contain 12–72 bytes")
+	}
+	if _, err := os.Stat(filepath.Join(data, "apptrail.db")); err != nil {
+		return err
+	}
+	db, err := openStore(filepath.Join(data, "apptrail.db"))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec("UPDATE owner SET password=? WHERE id=1", string(hash))
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n != 1 {
+		return fmt.Errorf("owner has not been set up")
+	}
+	if _, err = tx.Exec("DELETE FROM sessions"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func runConsoleServer(addr, data, origin string) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runServer(ctx, addr, data, origin)
+}
+
+func runServer(parent context.Context, addr, data, origin string) error {
+	if err := validateOrigin(origin); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(data, 0700); err != nil {
+		return err
+	}
+	db, err := openStore(filepath.Join(data, "apptrail.db"))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	s := &server{db: db, origin: strings.TrimRight(origin, "/"), attempts: make(map[string]attempt)}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM owner").Scan(&count); err != nil {
+		return err
+	}
 	if count == 0 {
-		p := filepath.Join(*data, "setup-token")
+		p := filepath.Join(data, "setup-token")
 		b, err := os.ReadFile(p)
 		if os.IsNotExist(err) {
 			b = []byte(id())
 			err = os.WriteFile(p, b, 0600)
 		}
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		s.setupToken = strings.TrimSpace(string(b))
 		log.Printf("First-run setup token: %s", s.setupToken)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := context.WithCancel(parent)
 	defer stop()
 	scanDone := make(chan struct{})
 	go func() { defer close(scanDone); s.scheduler(ctx) }()
-	h := &http.Server{Addr: *addr, Handler: s.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
+	h := &http.Server{Addr: addr, Handler: s.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
 	shutdownDone := make(chan struct{})
 	go func() {
 		defer close(shutdownDone)
 		<-ctx.Done()
-		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		_ = h.Shutdown(c)
+		if err := h.Shutdown(c); err != nil {
+			log.Printf("Shutdown: %v", err)
+			_ = h.Close()
+		}
 	}()
-	log.Printf("Apptrail listening on http://%s", *addr)
-	if err := h.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
-	}
+	log.Printf("Apptrail listening on http://%s", addr)
+	err = h.ListenAndServe()
 	stop()
 	<-shutdownDone
 	<-scanDone
+	if err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 func (s *server) routes() http.Handler {

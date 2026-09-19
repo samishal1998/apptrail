@@ -1,14 +1,15 @@
 services:
   apptrail:
-    build: .
+    image: ghcr.io/samishal1998/apptrail:${APPTRAIL_VERSION:-latest}
     ports:
-      - "8080:8080"
+      - "${APPTRAIL_PORT:-8080}:8080"
     volumes:
       - apptrail-data:/data
     restart: unless-stopped
-    # For an HTTPS reverse proxy, set your exact browser-facing origin:
-    # environment:
-    #   APPTRAIL_ORIGIN: https://apptrail.example.com
+    environment:
+      APPTRAIL_ORIGIN: ${APPTRAIL_ORIGIN:-}
+    # Docker discovery can use a restricted API proxy on a reachable network.
+    # Socket access, if desired, must be mounted and granted explicitly.
 
 volumes:
   apptrail-data:

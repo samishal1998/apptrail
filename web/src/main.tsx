@@ -38,6 +38,7 @@ type Provider = {
   count: number;
 };
 type Session = {
+  version: string;
   authenticated: boolean;
   setup_required: boolean;
   username: string;
@@ -474,7 +475,7 @@ function Auth({ session, done }: { session: Session; done: () => void }) {
               : "Owner access · Your dashboard, your rules."}
           </div>
         </div>
-        <span className="version">APPTRAIL / 0.1</span>
+        <span className="version">APPTRAIL / {session.version}</span>
       </section>
     </main>
   );
@@ -1483,7 +1484,7 @@ function Workspace({
                       </div>
                       <div>
                         <dt>Version</dt>
-                        <dd>0.1.0</dd>
+                        <dd>{session.version}</dd>
                       </div>
                     </dl>
                     <span className="eyebrow">A HOME FOR WHAT YOU HOST.</span>

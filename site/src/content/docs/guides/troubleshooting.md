@@ -21,6 +21,8 @@ Or add `~/.local/bin` to your shell's `PATH`. The installer intentionally leaves
 
 ## Docker says permission denied
 
+If **pulling the Apptrail image** is denied, check that `ghcr.io/samishal1998/apptrail` is publicly accessible or authenticate to GHCR for a private mirror. This differs from discovery access to the Docker daemon described below.
+
 The Apptrail process cannot access the configured socket. Check the actual account/group running the service and the socket's permissions. For a container, verify the socket mount and `group_add` configuration, or use a restricted Docker API proxy.
 
 Avoid solving this by making the socket world-writable. A `:ro` mount alone does not restrict Docker API operations.
@@ -71,5 +73,7 @@ If the origin is HTTPS, the browser must use HTTPS for its Secure session cookie
 Login and setup attempts are limited by source IP over a 15-minute window. Wait for that window to expire. Password recovery is available through the local CLI when you have access to the server.
 
 ## Still stuck?
+
+For native service problems, run `apptrail service status`. Check journald on Linux or `apptrail.log` in the configured data directory on macOS/Windows. Linux needs an active systemd user manager; macOS installation needs a logged-in desktop session; Windows management requires an Administrator terminal. Reuse your original data directory when moving a foreground installation into a service.
 
 [Open a GitHub issue](https://github.com/samishal1998/apptrail/issues) with your Apptrail version, operating system, relevant redacted diagnostics, and steps to reproduce. Leave setup tokens, cookies, passwords, and private infrastructure credentials out of the report.

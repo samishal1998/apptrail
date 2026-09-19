@@ -76,6 +76,7 @@ main() {
   printf '\nInstalled %s to %s/apptrail\n' "$reported" "$install_dir"
   case ":${PATH:-}:" in *":$install_dir:"*) ;; *) printf 'Add %s to your PATH, or use the full path below.\n' "$install_dir" ;; esac
   printf '\nStart your server:\n  "%s/apptrail" -addr 0.0.0.0:8080 -data "$HOME/.local/share/apptrail"\n' "$install_dir"
+  printf '\nBackground services (Apptrail 0.2+):\n  "%s/apptrail" service install\nGuide: https://samishal1998.github.io/apptrail/guides/services/\n' "$install_dir"
 }
 
 main "$@"

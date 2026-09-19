@@ -62,7 +62,7 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) {
 	if !a {
 		username = ""
 	}
-	reply(w, map[string]any{"authenticated": a, "setup_required": err == sql.ErrNoRows, "username": username})
+	reply(w, map[string]any{"authenticated": a, "setup_required": err == sql.ErrNoRows, "username": username, "version": version})
 }
 func (s *server) allowLogin(r *http.Request) bool {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)

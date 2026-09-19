@@ -15,6 +15,7 @@ export default defineConfig({
       { label: 'Start here', items: [
         { label: 'Installation', slug: 'guides/installation' },
         { label: 'Your first dashboard', slug: 'guides/quick-start' },
+        { label: 'Background services', slug: 'guides/services' },
       ] },
       { label: 'App guide', items: [
         { label: 'Apps & discovery', slug: 'guides/discovery' },

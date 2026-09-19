@@ -34,7 +34,7 @@ node --test scripts/install.test.cjs
 npm run build --prefix site
 ```
 
-GitHub runs these checks for pushes to `main` and pull requests. Installer tests use local download fixtures and cover architecture selection, pinned/latest versions, checksum rejection, and preserving an existing installation on failure.
+GitHub runs these checks for pushes to `main` and pull requests. Installer tests use local download fixtures and cover architecture selection, pinned/latest versions, checksum rejection, and preserving an existing installation on failure. Additional macOS/Windows jobs build the native executable and exercise service lifecycle operations (the macOS runtime check requires a logged-in GUI domain).
 
 ## Publish a release
 
@@ -50,10 +50,13 @@ Use a new version for each release. The release workflow:
 1. Builds the React frontend.
 2. Runs backend, installer, and validation checks.
 3. Cross-compiles the embedded Go executable for Linux AMD64/ARM64, macOS AMD64/ARM64, and Windows AMD64.
-4. Packages `.tar.gz` or `.zip` archives, the installer, and `SHA256SUMS`.
+4. Packages `.tar.gz` or `.zip` archives, the installer, Dockerfile, Compose file, and `SHA256SUMS`.
 5. Uploads everything to a draft release, then publishes it after all uploads succeed.
+6. Builds Alpine-based Linux AMD64/ARM64 images using that release's installer, pushes the versioned GHCR image, verifies container startup, and promotes stable images to `latest`.
 
-Prerelease tags such as `v0.2.0-rc.1` are marked as prereleases and do not replace the latest stable download. An existing public release is not overwritten by a rerun; a failed draft can be completed by rerunning the workflow.
+Prerelease tags such as `v0.3.0-rc.1` are marked as prereleases and do not replace the latest stable download or image. An existing public release is not overwritten by a rerun; a failed draft can be completed by rerunning the workflow. If only the container job fails after release publication, rerun **failed jobs** rather than the entire workflow.
+
+Container publication uses the repository's `GITHUB_TOKEN` with `packages: write`. GitHub may make a newly created package private; set the **apptrail** container package to **Public** in its package settings once, so anonymous Compose pulls work.
 
 To inspect the packages locally before tagging:
 
@@ -70,7 +73,7 @@ The **Documentation** workflow builds `site/` and deploys it with GitHub Pages w
 
 Repository settings must use **Pages → Source → GitHub Actions**. The workflow uses GitHub's Pages URL/base-path outputs, so the generated links and assets stay aligned with the deployment.
 
-`install.sh` is generated into the site from the root installer during the Astro build. The Pages installer and release installer share one source file.
+`install.sh`, `compose.yaml`, and `dockerfile.txt` are generated into the site from their root source files during the Astro build. Public downloads and release attachments share those same sources.
 
 For a custom domain, configure it in GitHub Pages and its DNS provider. For a local custom-base build, set `SITE_URL` and `SITE_BASE` when running `npm run build --prefix site`.
 

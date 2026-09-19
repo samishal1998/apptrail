@@ -13,33 +13,14 @@ apptrail -addr 0.0.0.0:8080 -data "$HOME/.local/share/apptrail"
 
 `-data` selects the persistent directory. Use local storage and retain this directory across upgrades. It contains the SQLite database, WAL files when active, and first-run setup token.
 
-## Run as a user service on Linux
-
-Create `~/.config/systemd/user/apptrail.service`:
-
-```ini
-[Unit]
-Description=Apptrail self-hosted dashboard
-After=network.target
-
-[Service]
-ExecStart=%h/.local/bin/apptrail -addr 0.0.0.0:8080 -data %h/.local/share/apptrail
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-```
-
-Then run:
+## Run as a background service
 
 ```sh
-systemctl --user daemon-reload
-systemctl --user enable --now apptrail
-journalctl --user -u apptrail -f
+apptrail service install
+apptrail service status
 ```
 
-The logs contain the first-run setup token. To run a user service after logging out, your host may need user lingering enabled with `loginctl enable-linger "$USER"`.
+Apptrail uses systemd user services on Linux, launchd LaunchAgents on macOS, and Windows Services on Windows. Windows setup requires an Administrator terminal; Linux/macOS setup runs as your normal user. See [background services](../services/) for data paths, logs, startup behavior, and lifecycle commands.
 
 For Docker Compose, use its configured restart policy and named volume instead.
 
@@ -53,11 +34,13 @@ APPTRAIL_ORIGIN=https://apptrail.example.com apptrail -addr 127.0.0.1:8080 -data
 
 This enables Secure session cookies and defines the accepted browser origin for mutations. Serve the frontend and API on the same origin. Forward the original Host header; Apptrail does not implicitly trust forwarded headers.
 
-For systemd, add this under `[Service]`:
+For CLI-managed services on Linux/macOS, reinstall the configuration with the exact origin and your existing data path:
 
-```ini
-Environment=APPTRAIL_ORIGIN=https://apptrail.example.com
+```sh
+apptrail service install -addr 127.0.0.1:8080 -data /absolute/path/to/data -origin https://apptrail.example.com
 ```
+
+Windows service configuration changes require uninstall/reinstall. With Compose, set `APPTRAIL_ORIGIN=https://apptrail.example.com` in the `.env` file and recreate the container with `docker compose up -d`.
 
 An example Caddy proxy:
 
@@ -83,16 +66,18 @@ To restore, stop Apptrail, restore that directory, and restart with the same `-d
 
 ## Upgrade
 
-Stop the service and make a backup first. Run the installer again to replace the executable:
+On Linux/macOS, stop the service and make a backup first. Run the installer again to replace the executable at the same path:
 
 ```sh
-systemctl --user stop apptrail
+apptrail service stop
 curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
 ~/.local/bin/apptrail --version
-systemctl --user start apptrail
+~/.local/bin/apptrail service start
 ```
 
 Keep your original data directory. Review release notes before upgrades; replacing a binary with an older version is not a database migration strategy. Restore a matching backup if a future schema change requires it.
+
+For Windows, follow the [service executable upgrade steps](../services/#windows--windows-services). For Docker Compose, run `docker compose pull` and `docker compose up -d`, preserving the existing project name and data volume.
 
 ## Owner account recovery
 
@@ -101,7 +86,7 @@ The owner can change their password in Settings. To recover a forgotten password
 ```sh
 read -rs -p 'New password: ' APPTRAIL_NEW_PASSWORD
 export APPTRAIL_NEW_PASSWORD
-~/.local/bin/apptrail -data "$HOME/.local/share/apptrail" -reset-password
+~/.local/bin/apptrail -data /absolute/path/to/your/data -reset-password
 unset APPTRAIL_NEW_PASSWORD
 ```
 

@@ -3,7 +3,7 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths: ['site/**', 'install.sh', '.github/workflows/pages.yml']
+    paths: ['site/**', 'install.sh', 'compose.yaml', 'Dockerfile', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:

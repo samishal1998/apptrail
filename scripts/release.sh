@@ -23,8 +23,9 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; d
   fi
 done
 cp install.sh "$out/install.sh"
+cp Dockerfile compose.yaml "$out/"
 # Hash names relative to the release directory so the same manifest works for downloaded assets.
-for artifact in "$out"/*.tar.gz "$out"/*.zip "$out/install.sh"; do
+for artifact in "$out"/*.tar.gz "$out"/*.zip "$out/install.sh" "$out/Dockerfile" "$out/compose.yaml"; do
   sum=$(sha256sum "$artifact")
   printf '%s  %s\n' "${sum%% *}" "${artifact##*/}"
 done > "$out/SHA256SUMS"

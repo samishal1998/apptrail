@@ -59,3 +59,62 @@ jobs:
           else
             gh release edit "$VERSION" --draft=false --latest
           fi
+
+  container:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Choose image tags
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          image="ghcr.io/${REPOSITORY,,}"
+          printf 'tags=%s:%s\nimage=%s\n' "$image" "$VERSION" "$image" >> "$GITHUB_OUTPUT"
+      - name: Publish release-backed images
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          build-args: APPTRAIL_VERSION=${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Verify published image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$(docker run --rm "$IMAGE:$VERSION" --version)" == "Apptrail $VERSION" ]]
+          docker run -d --name apptrail-smoke "$IMAGE:$VERSION"
+          trap 'docker logs apptrail-smoke; docker rm -f apptrail-smoke' EXIT
+          for attempt in $(seq 1 30); do
+            if docker exec apptrail-smoke wget -q -O - http://127.0.0.1:8080/api/session; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Promote verified stable image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          if [[ "$VERSION" != *-* ]]; then
+            docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$VERSION"
+          fi
