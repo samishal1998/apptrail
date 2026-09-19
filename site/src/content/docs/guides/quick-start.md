@@ -9,7 +9,7 @@ Once you have [installed Apptrail](../installation/) and created your owner acco
 
 ### Connect Docker
 
-Open **Providers → Connect provider**. Give the provider a name and enter a Docker API endpoint:
+Open **Providers → Connect provider**, select **Docker**, give the provider a name, and enter a Docker API endpoint:
 
 ```text
 unix:///var/run/docker.sock
@@ -20,6 +20,12 @@ For a remote or restricted proxy endpoint, use its HTTP(S) URL instead. Enable t
 If Apptrail runs in Docker, first give its container [Docker API access](../discovery/#container-discovery-access) through a restricted API proxy or a socket mount with the correct group permissions. Downloading the Compose deployment files alone does not grant infrastructure access.
 
 Apptrail reads containers, Docker health, and Apptrail/Traefik labels. It does not start, stop, or deploy containers. See [Docker discovery](../discovery/) for access requirements and supported routing rules.
+
+### Connect Caddy or Traefik directly
+
+In Apptrail v0.3+, select **Caddy** or **Traefik** in the same provider form. Enter Caddy's admin base endpoint, such as `http://127.0.0.1:2019` when both processes share the host, or Traefik's protected API base URL. Use an authorization file if that endpoint requires Basic or Bearer authentication.
+
+Save, then choose **Scan now**. Hostnames, paths, TLS, and listener ports are read from the API; management endpoints are not autodetected. See [proxy API setup](../discovery/#caddy-and-traefik-apis) for container networking, supported routes, and authentication.
 
 ### Add a manual app
 

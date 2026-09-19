@@ -28,10 +28,45 @@ type Dashboard = {
   public: boolean;
   items: string[];
 };
+type ProviderType = "docker" | "caddy" | "traefik";
+const providerTypes = {
+  docker: {
+    label: "Docker",
+    name: "Local Docker",
+    endpoint: "unix:///var/run/docker.sock",
+    endpointLabel: "Docker API endpoint",
+    placeholder: "unix:///var/run/docker.sock",
+    icon: "provider-docker",
+    summary: "Docker + Traefik labels",
+    help: "Use a Unix socket or an HTTP(S) Docker API proxy. Reads container labels and Docker health.",
+  },
+  caddy: {
+    label: "Caddy",
+    name: "Caddy",
+    endpoint: "http://127.0.0.1:2019",
+    endpointLabel: "Caddy admin endpoint",
+    placeholder: "http://caddy:2019",
+    icon: "provider-proxy",
+    summary: "Caddy active configuration",
+    help: "Use an HTTP(S) admin base URL without /config/, or unix:///path/to/admin.sock. In Docker, localhost refers to Apptrail's own container.",
+  },
+  traefik: {
+    label: "Traefik",
+    name: "Traefik",
+    endpoint: "",
+    endpointLabel: "Traefik API endpoint",
+    placeholder: "https://traefik.example.com",
+    icon: "provider-proxy",
+    summary: "Traefik routers & services",
+    help: "Enter the protected API origin and any configured base path, not /dashboard/ or a complete /api/... URL. The API must already be enabled.",
+  },
+} as const;
 type Provider = {
   id: string;
   name: string;
   endpoint: string;
+  type: ProviderType;
+  auth_file: string;
   enabled: boolean;
   scanned: number;
   error: string;
@@ -869,7 +904,7 @@ function Workspace({
                         : page === "Discover"
                           ? "Inspect apps with unresolved URLs or missing infrastructure."
                           : page === "Providers"
-                            ? "Discover Docker services and Traefik routes automatically."
+                            ? "Connect Docker, Caddy, and Traefik to discover your applications."
                             : "A few thoughtful defaults. The rest is up to you."}
                     </p>
                   </div>
@@ -1158,7 +1193,7 @@ function Workspace({
                                   a.sources?.some(
                                     (s) => !s.startsWith("manual:"),
                                   )
-                                    ? "provider-docker"
+                                    ? "providers"
                                     : "self-hosted"
                                 }
                               />
@@ -1232,9 +1267,10 @@ function Workspace({
                         Discovery that follows your infrastructure.
                       </strong>
                       <p>
-                        Apptrail reads Docker containers and Apptrail / Traefik
-                        labels every five minutes. A failed scan never removes
-                        your apps.
+                        Apptrail reads Docker labels, Caddy configuration, and
+                        Traefik routes every five minutes. Configure each API
+                        endpoint explicitly; a failed scan never removes your
+                        apps.
                       </p>
                     </div>
                   </div>
@@ -1252,8 +1288,8 @@ function Workspace({
                         </button>
                       }
                     >
-                      Use a local Docker socket or a restricted remote Docker
-                      API endpoint.
+                      Choose Docker, Caddy, or Traefik and connect its API
+                      endpoint.
                     </Empty>
                   ) : (
                     <div className="provider-list">
@@ -1261,7 +1297,9 @@ function Workspace({
                         <article className="provider-card" key={p.id}>
                           <div className="provider-main">
                             <div className="provider-logo">
-                              <Icon name="provider-docker" />
+                              <Icon
+                                name={providerTypes[p.type || "docker"].icon}
+                              />
                             </div>
                             <div>
                               <h2>
@@ -1301,9 +1339,11 @@ function Workspace({
                             </div>
                           </div>
                           <div className="provider-stats">
-                            <span>Docker + Traefik labels</span>
                             <span>
-                              <strong>{p.count}</strong> observations
+                              {providerTypes[p.type || "docker"].summary}
+                            </span>
+                            <span>
+                              <strong>{p.count}</strong> {p.count === 1 ? "observation" : "observations"}
                             </span>
                             <span>
                               Last successful scan:{" "}
@@ -1322,9 +1362,9 @@ function Workspace({
                   )}
                   <div className="info-line">
                     <Icon name="lock" />
-                    Connect through a restricted Docker API proxy where
-                    available. A read-only socket mount alone does not restrict
-                    Docker API permissions.
+                    Keep management APIs private. Use a restricted Docker API
+                    proxy or protected Caddy/Traefik endpoint. Provider
+                    connections do not use the metadata probe policy.
                   </div>
                 </>
               )}
@@ -1538,6 +1578,19 @@ function Editor({
     modal.type === "items" ? modal.dashboard.items : [],
   );
   const [itemSearch, setItemSearch] = useState("");
+  const initialProvider =
+    modal.type === "provider" ? modal.provider : undefined;
+  const [providerType, setProviderType] = useState<ProviderType>(
+    initialProvider?.type || "docker",
+  );
+  const [providerName, setProviderName] = useState(
+    initialProvider?.name ||
+      providerTypes[initialProvider?.type || "docker"].name,
+  );
+  const [providerEndpoint, setProviderEndpoint] = useState(
+    initialProvider?.endpoint ||
+      providerTypes[initialProvider?.type || "docker"].endpoint,
+  );
   async function save(action: () => Promise<unknown>, message: string) {
     setPending(true);
     setError("");
@@ -1725,7 +1778,7 @@ function Editor({
     return (
       <Dialog
         title={p ? "Provider settings" : "Connect your infrastructure."}
-        subtitle="Read Docker containers and discover routes from Traefik labels."
+        subtitle="Choose the infrastructure source you want to discover."
         close={close}
       >
         <form
@@ -1741,6 +1794,8 @@ function Editor({
                     name: f.get("name"),
                     endpoint: f.get("endpoint"),
                     enabled: f.has("enabled"),
+                    type: providerType,
+                    auth_file: f.get("auth_file") || "",
                   },
                 ),
               "Provider saved. Use Scan now to discover apps.",
@@ -1748,24 +1803,78 @@ function Editor({
           }}
         >
           <label>
+            Provider type
+            <select
+              className="provider-type-select"
+              value={providerType}
+              disabled={!!p}
+              onChange={(e) => {
+                const next = e.target.value as ProviderType;
+                setProviderName((name) =>
+                  name === providerTypes[providerType].name
+                    ? providerTypes[next].name
+                    : name,
+                );
+                setProviderEndpoint((endpoint) =>
+                  endpoint === providerTypes[providerType].endpoint
+                    ? providerTypes[next].endpoint
+                    : endpoint,
+                );
+                setProviderType(next);
+              }}
+            >
+              {Object.entries(providerTypes).map(([type, meta]) => (
+                <option key={type} value={type}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
+            {p && (
+              <small>To change the source type, create a new provider.</small>
+            )}
+          </label>
+          <label>
             Provider name
             <input
               name="name"
-              defaultValue={p?.name || "Local Docker"}
+              value={providerName}
+              onChange={(e) => setProviderName(e.target.value)}
               required
               maxLength={100}
             />
           </label>
           <label>
-            Docker API endpoint
+            {providerTypes[providerType].endpointLabel}
             <input
               name="endpoint"
-              defaultValue={p?.endpoint || "unix:///var/run/docker.sock"}
+              value={providerEndpoint}
+              onChange={(e) => setProviderEndpoint(e.target.value)}
               required
-              placeholder="unix:///var/run/docker.sock"
+              placeholder={providerTypes[providerType].placeholder}
+              maxLength={2048}
             />
-            <small>Use a Unix socket or an HTTP(S) Docker API proxy.</small>
+            <small>{providerTypes[providerType].help}</small>
           </label>
+          <details className="provider-auth" open={!!p?.auth_file}>
+            <summary>Authentication (optional)</summary>
+            <label>
+              Authorization file
+              <input
+                name="auth_file"
+                defaultValue={p?.auth_file || ""}
+                placeholder="/run/secrets/proxy-authorization"
+                maxLength={4096}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <small>
+                Absolute path on the Apptrail server containing one
+                Authorization value, such as Bearer TOKEN or Basic BASE64. Mount
+                the file read-only in Docker. Only its path is stored;
+                credentials are reread on each scan.
+              </small>
+            </label>
+          </details>
           <label className="checkbox-line">
             <input
               type="checkbox"

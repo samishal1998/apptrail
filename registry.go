@@ -131,6 +131,7 @@ func (s *server) apps() ([]application, error) {
 	}
 	apps := []application{}
 	overrides := map[string]override{}
+	currentFacts := map[string]map[string]fact{}
 	positions := map[string]int{}
 	for rows.Next() {
 		var a application
@@ -146,6 +147,7 @@ func (s *server) apps() ([]application, error) {
 		}
 		overrides[a.ID] = ov
 		a.Fields = map[string]fact{}
+		currentFacts[a.ID] = map[string]fact{}
 		a.Sources = []string{}
 		a.Health = "unknown"
 		a.Lifecycle = "missing"
@@ -194,6 +196,12 @@ func (s *server) apps() ([]application, error) {
 			if !ok || f.Priority >= old.Priority {
 				a.Fields[key] = f
 			}
+			if present {
+				old, ok := currentFacts[a.ID][key]
+				if !ok || f.Priority >= old.Priority {
+					currentFacts[a.ID][key] = f
+				}
+			}
 		}
 	}
 	if err = rows.Err(); err != nil {
@@ -201,6 +209,10 @@ func (s *server) apps() ([]application, error) {
 	}
 	for i := range apps {
 		a := &apps[i]
+		// Missing sources remain inspectable, but cannot override facts from a currently observed app.
+		if a.Lifecycle == "present" {
+			a.Fields = currentFacts[a.ID]
+		}
 		ov := overrides[a.ID]
 		for key, p := range map[string]*string{"name": ov.Name, "description": ov.Description, "url": ov.URL, "icon": ov.Icon, "category": ov.Category} {
 			if p != nil {

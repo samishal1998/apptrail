@@ -65,7 +65,7 @@ The working pack includes the [discovery manifest schema](https://github.com/sam
 
 ## Understand health
 
-Health may come from Docker, an explicit Apptrail health endpoint, or a launch-URL probe. The source inspector shows which one supplied the effective state.
+Health may come from Docker, Traefik's upstream status, an explicit Apptrail health endpoint, or a launch-URL probe. The source inspector shows which one supplied the effective state. Caddy configuration discovery alone does not perform an availability check.
 
 | State | Meaning |
 | --- | --- |

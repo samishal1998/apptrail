@@ -54,6 +54,15 @@ func openStore(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
+	var schemaVersion int
+	if err = db.QueryRow("PRAGMA user_version").Scan(&schemaVersion); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if schemaVersion > 1 {
+		db.Close()
+		return nil, fmt.Errorf("database schema %d is newer than this Apptrail build", schemaVersion)
+	}
 	_, err = db.Exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
 CREATE TABLE IF NOT EXISTS owner (id INTEGER PRIMARY KEY CHECK(id=1), username TEXT NOT NULL, password TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);
@@ -68,6 +77,25 @@ INSERT OR IGNORE INTO dashboards(id,name,slug) VALUES('home','Overview','home');
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+	if schemaVersion < 1 {
+		tx, e := db.Begin()
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
+		_, e = tx.Exec(`ALTER TABLE providers ADD COLUMN kind TEXT NOT NULL DEFAULT 'docker' CHECK(kind IN ('docker','caddy','traefik'));
+ALTER TABLE providers ADD COLUMN auth_file TEXT NOT NULL DEFAULT '';
+PRAGMA user_version=1;`)
+		if e == nil {
+			e = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
 	}
 	return db, nil
 }

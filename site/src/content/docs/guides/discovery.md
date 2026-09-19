@@ -1,24 +1,28 @@
 ---
 title: Apps & discovery
-description: Connect Docker, discover Traefik routes, and understand Apptrail's stable application registry.
+description: Connect Docker, Caddy, or Traefik and understand Apptrail's stable application registry.
 ---
 
 ## Supported providers
 
-The initial release supports Docker containers, Traefik routing labels on those containers, and manual application entries.
+Apptrail v0.3 supports **Docker**, **Caddy**, and **Traefik** API providers, plus manual application entries. Docker discovery also reads Traefik labels without needing a separate Traefik API connection.
 
-Docker discovery uses API **v1.44**, requiring **Docker Engine 25 or newer** or a compatible API. Caddy, Nginx, Apache, file providers, and Docker event watching are later milestones.
+Docker discovery uses API **v1.44**, requiring **Docker Engine 25 or newer** or a compatible API. Nginx, Apache, direct configuration-file providers, and Docker event watching are later milestones.
 
 ## Connect a provider
 
-In **Providers**, create an endpoint and run **Scan now**. Supported endpoint forms:
+In **Providers → Connect provider**, select **Docker**, **Caddy**, or **Traefik**, enter that API's base endpoint, and run **Scan now**. Endpoints are configured explicitly; Apptrail does not scan your network or autodetect administration ports. Supported endpoint forms include:
 
 ```text
 unix:///var/run/docker.sock
 https://docker-api.example.com
+http://127.0.0.1:2019
+https://traefik.example.com
 ```
 
 A provider reports its last successful scan, observation count, and connection/parse diagnostics. Enabled providers are scanned on a five-minute ticker. Slow network work can extend a busy cycle.
+
+The type is fixed once a provider is created. Its name, endpoint, authorization-file path, and enabled state can be edited. Existing installations upgrade their stored providers as Docker providers, preserving IDs, observations, accounts, overrides, and dashboards. Back up your data before upgrading; the new provider fields require a schema migration.
 
 ### Docker access
 
@@ -30,17 +34,17 @@ GET /v1.44/containers/json?all=true
 
 Use a restricted Docker API proxy where available. Direct Docker socket access is highly privileged: mounting the socket with `:ro` does **not** restrict which Docker API operations a process could request.
 
-For direct socket use, the account running Apptrail must already have access to that socket. In a container, mount it explicitly and supply the socket's host group ID using `group_add`. Apptrail does not modify socket permissions. Remote HTTPS endpoints use the system CA roots; client-certificate and custom authentication configuration are not part of this release.
+For direct socket use, the account running Apptrail must already have access to that socket. In a container, mount it explicitly and supply the socket's host group ID using `group_add`. Apptrail does not modify socket permissions. HTTPS uses the system CA roots. Authorization headers are supported through a file; custom CA configuration, client certificates, and other authentication header names are not currently provider settings.
 
 ## Container discovery access
 
 The [two-file Compose installation](../installation/#docker-compose) builds Apptrail's image locally from its Dockerfile and the released CLI installer. **Build context is not runtime discovery access:** putting proxy configuration next to the Dockerfile does not make it available inside the running container. Configure the relevant API connection or an explicit runtime mount.
 
-| Source | Access needed | Config-file mount needed? | Apptrail v0.2 support |
+| Source | Access needed | Config-file mount needed? | Apptrail v0.3 support |
 | --- | --- | --- | --- |
 | Docker containers and Traefik Docker labels | Docker API through a mounted socket or restricted HTTP(S) proxy | No Caddyfile, Traefik file, or application Compose file | Available |
-| Traefik's active HTTP routers/services | Traefik's enabled, protected HTTP API | No | Planned |
-| Caddy's active configuration | Caddy admin API, preferably its native JSON configuration | No | Planned |
+| Traefik's active HTTP routers/services | Traefik's enabled, protected HTTP API | No | Available |
+| Caddy's active configuration | Caddy admin API, using its native JSON configuration | No | Available |
 | Caddyfile or Traefik file-provider configuration | Read-only bind mounts of the configuration and included files | Yes | Planned |
 
 ### Use a Docker API proxy
@@ -91,45 +95,81 @@ This socket path and `stat` command are Linux-specific. Rootless Docker and Dock
 
 ## Caddy and Traefik APIs
 
-:::note[Planned integrations]
-Caddy and direct Traefik API discovery are not implemented in Apptrail v0.2. The current provider endpoint field expects a **Docker API**, not a Caddy or Traefik API. Mounting their config files or enabling private-network metadata probes does not add those providers.
+:::note[Explicit API connections]
+Choose the correct provider type. Apptrail reads the configured API; it does not enable the proxy's API, change proxy configuration, or scan for open ports. The private-network probe setting applies to app metadata fetching, not these owner-configured provider connections.
 :::
 
 ### Caddy: active JSON configuration
 
-Caddy has an administration API. Its default listener is **`localhost:2019`**, unless changed or disabled by configuration. A future Apptrail provider can read:
+Select **Caddy**, then enter an admin base endpoint such as `http://127.0.0.1:2019` on the same host, `http://caddy:2019` on a suitably configured private container network, or `unix:///run/caddy/admin.sock` for a readable admin socket. Do not append `/config/` yourself. Caddy's default listener is **`localhost:2019`**, unless changed or disabled by configuration. Apptrail reads:
 
 ```http
 GET /config/
-GET /config/apps/http/servers
 ```
 
-These return Caddy's active native JSON configuration, including routing and reverse-proxy handlers. Reading the active configuration avoids having to reconstruct it from Caddyfile imports, environment substitutions, or subsequent API changes. A Caddyfile mount is unnecessary for this approach.
+This returns Caddy's active native JSON configuration. Apptrail walks nested `subroute` handlers and discovers `reverse_proxy` and `file_server` routes with concrete hostnames and supported paths. Caddyfile `handle_path` routes work through their adapted JSON. TLS policies and supported automatic-HTTPS settings determine the scheme; listener addresses provide ports. A Caddyfile mount is unnecessary.
 
-In separate containers, the default loopback listener is not reachable from Apptrail. Access would need an explicitly reachable private listener or a permissioned shared Unix socket. Caddy's admin API can also **change configuration and stop the server**; an Apptrail integration should use a restricted read-only access path rather than publicly publishing port `2019`.
+Literal host/path matchers and a terminal path wildcard such as `/photos/*` are supported. Host wildcards, dynamic placeholders, other request matcher types, and non-TCP or port-range listeners are reported as unresolved. Redirect-only and arbitrary response handlers are not treated as applications. Missing hostnames are never guessed from the admin endpoint's address.
+
+In separate containers, the default loopback listener is not reachable from Apptrail. Configure an explicitly reachable private listener or a permissioned shared Unix socket. Caddy's admin API can also **change configuration and stop the server**; give Apptrail a restricted read-only access path rather than publicly publishing port `2019`. Apptrail itself only sends GET requests. An authorization file is useful when a protected access proxy fronts the admin API; it does not enable authentication in Caddy by itself.
 
 See the [Caddy admin API reference](https://caddyserver.com/docs/api).
 
 ### Traefik: inspect active routers and services
 
-Traefik has a **read-only inspection API**, also used by its dashboard. It is not a configuration-writing control plane. Useful discovery endpoints include:
+Select **Traefik**, then enter the base URL serving its protected API, for example `https://traefik.example.com`. Include a configured API base-path prefix, but not `/dashboard/` or a complete `/api/...` path. Traefik has a **read-only inspection API**, also used by its dashboard. Apptrail reads:
 
 ```http
 GET /api/http/routers
 GET /api/http/services
 GET /api/entrypoints
-GET /api/rawdata
 ```
 
-These can expose active routing information from enabled providers, including file-backed configuration. A future API integration can inspect those routes without mounting Traefik's configuration files. A configured API base path changes the endpoint prefixes.
+These expose active routing information from enabled providers, including file-backed configuration. Apptrail derives launch URLs from enabled HTTP routers, their entrypoints, and TLS settings, and reads available upstream health from services. Docker and API observations with the same normalized URL reconcile into the same application.
+
+Rules can combine literal `Host`, `Path`, and `PathPrefix` matchers with `&&`, `||`, and parentheses. Unsupported matchers such as `HostRegexp`, negation, and request-header constraints produce unresolved entries instead of guessed URLs. Internal API/no-op routers are ignored, and disabled routers are excluded with diagnostics.
+
+Traefik paginates its API. Apptrail requests one bounded page with `per_page=10001`, accepts at most 10,000 records per endpoint, and rejects a response that indicates more pages. A truncated or failed scan never marks previously observed apps missing. Access proxies must preserve the query parameters and pagination headers.
 
 The API must be enabled and exposed deliberately, typically through a protected router using `api@internal`. Keep it on a restricted network with appropriate access controls; do not enable an unprotected public API just for discovery. **The existing Docker-label integration does not require enabling this API at all.**
 
 See the [Traefik API and dashboard reference](https://doc.traefik.io/traefik/reference/install-configuration/api-dashboard/).
 
+### Protected APIs
+
+Expand **Authentication (optional)** in the provider form and enter an absolute **Authorization file** path on the Apptrail server. The file contains one complete header value, for example:
+
+```text
+Bearer YOUR_READ_ONLY_TOKEN
+```
+
+For Basic authentication, use `Basic ` followed by the Base64 encoding of `username:password`. Only the file path is stored in provider settings. Credentials are read again on every scan, so rotating the file takes effect without recreating the provider. The file must be a readable regular file of at most 8 KiB.
+
+For a container, mount your file read-only and enter the **container** path in the form. For example, add to your Compose override:
+
+```yaml
+services:
+  apptrail:
+    volumes:
+      - type: bind
+        source: ./proxy-authorization
+        target: /run/secrets/proxy-authorization
+        read_only: true
+        bind:
+          create_host_path: false
+```
+
+Create the host file first and grant the Apptrail process read access. In this example, enter `/run/secrets/proxy-authorization`. Do not put credentials in the endpoint URL or labels. Provider requests reject redirects, avoiding forwarding the authorization value to another endpoint. API response bodies and authorization values are not copied into connection-error diagnostics.
+
+### Port inference and limits
+
+The **management endpoint** is always explicitly configured. Application hostnames, paths, TLS, and listener ports are inferred from the API data. A Docker host port mapping, external load balancer, or NAT can make the real public port different from that listener port; use the app's launch-URL override in that case. The management API's port is never reused as an application port.
+
+API responses are capped at 8 MiB, individual requests at 12 seconds, and a provider scan at a 45-second network deadline. Route expansion is bounded to 10,000 entries and nesting to 32 levels. Caddy health initially remains unknown until app metadata/health probing supplies it; reading configuration is not itself an availability check.
+
 ### File mounts as a fallback
 
-If API access is unavailable, a future file-based provider would need explicit read-only mounts. This is an **illustrative future mount layout**, not a working provider configuration in v0.2:
+If API access is unavailable, a future file-based provider would need explicit read-only mounts. This is an **illustrative future mount layout**, not a working provider configuration in v0.3:
 
 ```yaml
 services:
@@ -151,9 +191,9 @@ services:
 
 The host directories must exist and be readable by Apptrail's container user. A file provider would read container paths such as `/config/caddy/Caddyfile` or `/config/traefik/dynamic/apps.yaml`. Mount required imports/includes and preserve their path relationships; a top-level file alone may be insufficient. Traefik's static `traefik.yml` often only selects providers and entry points—the actual routes can live in separate dynamic files or Docker labels.
 
-Mount only the configuration required for discovery, not certificate stores, private keys, or unrelated secrets. File snapshots can differ from the running proxy's active state, so the planned preference is API discovery when a suitable protected endpoint is available.
+Mount only the configuration required for discovery, not certificate stores, private keys, or unrelated secrets. File snapshots can differ from the running proxy's active state; the implemented Caddy/Traefik providers use their APIs instead.
 
-For now, add Caddy-routed or Traefik-file-routed apps manually, or give their Docker containers an explicit `apptrail.url` label so the existing Docker provider can discover them.
+When an API is unavailable or a route cannot be resolved, add the app manually, override its launch URL, or give its Docker container an explicit `apptrail.url` label.
 
 ## Apptrail labels
 
@@ -186,7 +226,7 @@ Never put passwords, tokens, or other secrets in labels.
 
 ## Traefik routes
 
-Apptrail recognizes a `Host` rule with an optional `PathPrefix` conjunction:
+The Docker-label integration uses the same literal `Host`, `Path`, and `PathPrefix` rule support as the Traefik API provider. For example:
 
 ```yaml
 labels:
@@ -212,3 +252,5 @@ Manual entries also participate in URL identity. Later infrastructure discovery 
 - **Forget app:** removes it and its dashboard placements. A later scan can discover it again.
 
 Nothing is automatically deleted. Pausing a provider stops future scans. Removing a provider retains its observations as missing.
+
+If another provider still observes an app, missing sources cannot override its current facts. If all infrastructure sources are missing, last-known fields remain available. Owner overrides always take precedence.

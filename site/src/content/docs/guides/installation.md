@@ -31,7 +31,7 @@ When migrating an existing instance, stop its foreground process and pass the ex
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/install.sh |
-  sh -s -- --version v0.2.0 --dir "$HOME/bin"
+  sh -s -- --version v0.3.0 --dir "$HOME/bin"
 ```
 
 `APPTRAIL_VERSION` and `APPTRAIL_INSTALL_DIR` are also supported. A custom directory must be an absolute path writable by your user. Prereleases require an explicit version; the default follows GitHub's latest stable release.
@@ -51,8 +51,8 @@ The script requires `curl`, `tar`, `awk`, and either `sha256sum` or `shasum`, al
 Download the **windows_amd64.zip** archive and `SHA256SUMS` from [GitHub Releases](https://github.com/samishal1998/apptrail/releases/latest). Compare the archive's hash with its entry in `SHA256SUMS`:
 
 ```powershell
-Get-FileHash .\apptrail_v0.2.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\apptrail_v0.2.0_windows_amd64.zip .\apptrail
+Get-FileHash .\apptrail_v0.3.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\apptrail_v0.3.0_windows_amd64.zip .\apptrail
 cd apptrail
 .\apptrail.exe -addr 0.0.0.0:8080 -data .\data
 ```
@@ -74,9 +74,9 @@ docker compose logs apptrail
 
 Compose uses `build.context: .` and passes `APPTRAIL_VERSION` to the Dockerfile. The installer downloads the matching Linux AMD64 or ARM64 binary and verifies its checksum. The container publishes port `8080` and stores data in the `apptrail-data` named volume. It runs as UID/GID `10001`. Docker discovery access must be configured separately; the default container does not mount the host's Docker socket.
 
-See [container discovery access](../discovery/#container-discovery-access) for a Docker socket override, group permissions, and API-proxy connections. Traefik Docker-label discovery needs Docker API access rather than a Traefik config-file mount. Caddy and direct Traefik APIs can avoid file mounts in future integrations; their current support status is documented in that guide.
+See [container discovery access](../discovery/#container-discovery-access) for a Docker socket override, group permissions, and proxy API connections. Traefik Docker-label discovery uses the Docker API. In v0.3+, select Caddy or Traefik to read their APIs directly; configuration-file mounts are not needed for these integrations.
 
-Set `APPTRAIL_VERSION=v0.2.0` to pin the CLI release installed into the image, `APPTRAIL_PORT=9090` to change the host port, or `APPTRAIL_ORIGIN=https://apptrail.example.com` for an HTTPS reverse proxy. These can go in a `.env` file next to `compose.yaml`.
+Set `APPTRAIL_VERSION=v0.3.0` to pin the CLI release installed into the image, `APPTRAIL_PORT=9090` to change the host port, or `APPTRAIL_ORIGIN=https://apptrail.example.com` for an HTTPS reverse proxy. These can go in a `.env` file next to `compose.yaml`.
 
 When following `latest`, upgrade with `docker compose build --pull --no-cache` followed by `docker compose up -d`. Docker otherwise may reuse the installer layer and retain the old CLI. If you pin a version, changing `APPTRAIL_VERSION` and running `docker compose up --build -d` rebuilds that layer. Keep the same Compose project name and named volume when migrating an existing installation.
 
@@ -86,7 +86,7 @@ You can also build the same Dockerfile directly, without Compose:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
-docker build --build-arg APPTRAIL_VERSION=v0.2.0 -t apptrail:local .
+docker build --build-arg APPTRAIL_VERSION=v0.3.0 -t apptrail:local .
 ```
 
 It uses Alpine and the verified release installer. It does not clone the repository or compile Go/React. Both the Dockerfile and Compose file are also attached to GitHub releases.

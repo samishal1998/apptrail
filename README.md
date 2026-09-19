@@ -13,7 +13,7 @@ curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
 ~/.local/bin/apptrail service install
 ```
 
-The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.2.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
+The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.3.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
 
 Run `apptrail --version` to inspect the installed version. See the [installation guide](https://samishal1998.github.io/apptrail/guides/installation/) and [service guide](https://samishal1998.github.io/apptrail/guides/services/) for setup and lifecycle commands.
 
@@ -76,13 +76,13 @@ docker compose logs apptrail
 
 Compose builds the local Dockerfile. It starts from Alpine and uses the verified CLI installer to download the released Linux AMD64/ARM64 executable. Only `compose.yaml` and `Dockerfile` are needed; application source and compilers are not part of the build. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
 
-Optional Compose variables: `APPTRAIL_VERSION=v0.2.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
+Optional Compose variables: `APPTRAIL_VERSION=v0.3.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
 
 The same standalone Dockerfile can also be built directly:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
-docker build --build-arg APPTRAIL_VERSION=v0.2.0 -t apptrail:local .
+docker build --build-arg APPTRAIL_VERSION=v0.3.0 -t apptrail:local .
 ```
 
 The Dockerfile and Compose file are also attached to releases with checksums. The app runs in the foreground inside containers; Docker's restart policy manages its lifecycle.
@@ -91,13 +91,17 @@ The Dockerfile and Compose file are also attached to releases with checksums. Th
 
 Container build context does not grant runtime access to your infrastructure. The current Docker/Traefik-label provider needs either a mounted Docker socket with suitable group permissions or a restricted HTTP(S) Docker API proxy. It does not need your application Compose files or Traefik config files.
 
-Caddy exposes active JSON through its admin API (`GET /config/`, default `localhost:2019`), and Traefik exposes active routers/services through its read-only API (`GET /api/http/routers`, `GET /api/http/services`). These can avoid file mounts, but **Caddy and direct Traefik API/file discovery are planned, not implemented in v0.2**. For now, use manual apps or explicit `apptrail.url` Docker labels for routes the label parser cannot discover.
+In **v0.3+**, choose **Caddy** or **Traefik** in the provider form to use their APIs directly. Caddy discovery reads `GET /config/`; Traefik discovery reads HTTP routers, entrypoints, and services. Enter each management API's base endpoint explicitly; there is no port scanning. Protected endpoints can use an Authorization header loaded from a server-side file. Config-file mounts are not needed for API discovery; direct Caddyfile/Traefik-file parsing remains planned.
+
+Caddy nested reverse-proxy/static-file routes support literal host/path matchers and terminal path wildcards. Traefik supports literal Host/Path/PathPrefix rules with AND, OR, and parentheses. Unsupported dynamic constraints remain unresolved with diagnostics. Application ports come from proxy listener/entrypoint configuration; use a URL override if external NAT or Docker port mappings differ.
+
+Back up the persistent data directory before upgrading. The database migration preserves existing Docker providers, owner accounts, application identities, overrides, and dashboards while adding provider type and authorization-file fields.
 
 The [discovery guide](https://samishal1998.github.io/apptrail/guides/discovery/#container-discovery-access) includes a working socket-mount override, group setup, container networking details, and clearly marked future file-mount examples. Caddy's default loopback admin listener is not reachable from another container simply by sharing a Docker network.
 
 ## First steps
 
-1. **Providers → Connect provider:** choose a Docker Unix socket or HTTP(S) API endpoint, then **Scan now**.
+1. **Providers → Connect provider:** select Docker, Caddy, or Traefik, configure its API base endpoint and optional authorization file, then **Scan now**.
 2. **Apps:** inspect discovered applications or add manual entries. Favorite, rename, hide, and override icons here.
 3. **Overview → Choose apps:** choose exactly which apps appear on that dashboard page. New discovery does not rearrange your curated page.
 4. **Layout:** drag cards, or use the keyboard-accessible earlier/later buttons. Ordering persists independently for each page.
@@ -111,7 +115,7 @@ Public pages live at `/d/<slug>`. Anonymous visitors receive only that page's vi
 The initial provider reads the Docker **v1.44 API (Engine 25+)** and supports:
 
 - Apptrail labels: `enable`, `id`, `name`, `description`, `category`, `icon`, `url`, `manifest`, `health.url`, and `health.method` under the `apptrail.*` namespace.
-- Traefik `Host(...)` with an optional `&& PathPrefix(...)`, explicit router TLS settings, and stable Compose project/service identity.
+- Traefik literal `Host(...)`, `Path(...)`, and `PathPrefix(...)` rules with AND/OR, explicit router TLS settings, and stable Compose project/service identity.
 - Docker health and container running state.
 - Scheduled snapshots on a five-minute ticker, plus manual scans.
 
@@ -178,7 +182,7 @@ The backend integration checks cover owner setup/login, password/session revocat
 
 The visual implementation reuses the working pack's dark/light tokens and SVG icons. The canonical logo/background exports remain pending in the pack; the UI uses a text wordmark and decorative CSS scenery.
 
-Caddy/Nginx/Apache/file providers, widgets, Docker event watching, and multiple user accounts remain later milestones from the PRD.
+Nginx/Apache/configuration-file providers, widgets, Docker event watching, and multiple user accounts remain later milestones from the PRD.
 
 ## Website and release maintenance
 

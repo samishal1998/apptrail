@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +18,8 @@ type provider struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Endpoint string `json:"endpoint"`
+	Type     string `json:"type"`
+	AuthFile string `json:"auth_file"`
 	Enabled  bool   `json:"enabled"`
 	Scanned  int64  `json:"scanned"`
 	Error    string `json:"error"`
@@ -28,7 +27,7 @@ type provider struct {
 }
 
 func (s *server) providers() ([]provider, error) {
-	rows, err := s.db.Query("SELECT id,name,endpoint,enabled,scanned,error,count FROM providers ORDER BY name,id")
+	rows, err := s.db.Query("SELECT id,name,endpoint,enabled,scanned,error,count,kind,auth_file FROM providers ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +35,7 @@ func (s *server) providers() ([]provider, error) {
 	out := []provider{}
 	for rows.Next() {
 		var p provider
-		if err = rows.Scan(&p.ID, &p.Name, &p.Endpoint, &p.Enabled, &p.Scanned, &p.Error, &p.Count); err != nil {
+		if err = rows.Scan(&p.ID, &p.Name, &p.Endpoint, &p.Enabled, &p.Scanned, &p.Error, &p.Count, &p.Type, &p.AuthFile); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -56,6 +55,9 @@ func validEndpoint(raw string) error {
 	if err != nil {
 		return err
 	}
+	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return fmt.Errorf("use a base URL without credentials, query parameters, or fragments")
+	}
 	if u.Scheme == "unix" && u.Host == "" && filepath.IsAbs(u.Path) && u.RawQuery == "" && u.Fragment == "" {
 		return nil
 	}
@@ -72,6 +74,8 @@ func (s *server) saveProvider(w http.ResponseWriter, r *http.Request) {
 		Name     string `json:"name"`
 		Endpoint string `json:"endpoint"`
 		Enabled  bool   `json:"enabled"`
+		Type     string `json:"type"`
+		AuthFile string `json:"auth_file"`
 	}
 	if !body(w, r, &p) {
 		return
@@ -80,19 +84,47 @@ func (s *server) saveProvider(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "Provider name is required")
 		return
 	}
+	if p.Type == "" {
+		p.Type = "docker"
+	}
+	if p.Type != "docker" && p.Type != "caddy" && p.Type != "traefik" {
+		fail(w, 400, "Choose Docker, Caddy, or Traefik")
+		return
+	}
+	if len(p.Endpoint) > 2048 {
+		fail(w, 400, "Provider endpoint is too long")
+		return
+	}
+	if p.AuthFile != "" && (!filepath.IsAbs(p.AuthFile) || strings.ContainsAny(p.AuthFile, "\x00\r\n") || len(p.AuthFile) > 4096) {
+		fail(w, 400, "Authorization file must be an absolute path on the Apptrail server")
+		return
+	}
 	if err := validEndpoint(p.Endpoint); err != nil {
-		fail(w, 400, "Use a unix:///absolute/socket path or an HTTP(S) Docker API endpoint")
+		fail(w, 400, "Use a unix:///absolute/socket path or an HTTP(S) API base URL without credentials, query parameters, or fragments")
 		return
 	}
 	pid := r.PathValue("id")
 	if pid == "" {
 		pid = id()
-		if _, err := s.db.Exec("INSERT INTO providers(id,name,endpoint,enabled) VALUES(?,?,?,?)", pid, p.Name, p.Endpoint, p.Enabled); err != nil {
+		if _, err := s.db.Exec("INSERT INTO providers(id,name,endpoint,enabled,kind,auth_file) VALUES(?,?,?,?,?,?)", pid, p.Name, p.Endpoint, p.Enabled, p.Type, p.AuthFile); err != nil {
 			dbError(w, err)
 			return
 		}
 	} else {
-		res, err := s.db.Exec("UPDATE providers SET name=?,endpoint=?,enabled=? WHERE id=?", p.Name, p.Endpoint, p.Enabled, pid)
+		var kind string
+		if err := s.db.QueryRow("SELECT kind FROM providers WHERE id=?", pid).Scan(&kind); err != nil {
+			if err == sql.ErrNoRows {
+				notFound(w)
+			} else {
+				dbError(w, err)
+			}
+			return
+		}
+		if p.Type != kind {
+			fail(w, 400, "Provider type cannot be changed; create a new provider instead")
+			return
+		}
+		res, err := s.db.Exec("UPDATE providers SET name=?,endpoint=?,enabled=?,auth_file=? WHERE id=?", p.Name, p.Endpoint, p.Enabled, p.AuthFile, pid)
 		if !changed(w, res, err) {
 			return
 		}
@@ -151,7 +183,7 @@ func (s *server) scan(ctx context.Context, p provider) error {
 		return fmt.Errorf("another scan is already running")
 	}
 	defer s.scans.Unlock()
-	if err := s.db.QueryRow("SELECT name,endpoint,enabled FROM providers WHERE id=?", p.ID).Scan(&p.Name, &p.Endpoint, &p.Enabled); err != nil {
+	if err := s.db.QueryRow("SELECT name,endpoint,enabled,kind,auth_file FROM providers WHERE id=?", p.ID).Scan(&p.Name, &p.Endpoint, &p.Enabled, &p.Type, &p.AuthFile); err != nil {
 		return err
 	}
 	if !p.Enabled {
@@ -159,7 +191,19 @@ func (s *server) scan(ctx context.Context, p provider) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	obs, warning, err := dockerSnapshot(ctx, p)
+	var obs []observation
+	var warning string
+	var err error
+	switch p.Type {
+	case "docker":
+		obs, warning, err = dockerSnapshot(ctx, p)
+	case "caddy":
+		obs, warning, err = caddySnapshot(ctx, p)
+	case "traefik":
+		obs, warning, err = traefikSnapshot(ctx, p)
+	default:
+		err = fmt.Errorf("unsupported provider type %q", p.Type)
+	}
 	if err == nil {
 		err = s.reconcile(p.ID, obs)
 	}
@@ -225,48 +269,16 @@ type container struct {
 	Labels map[string]string
 }
 
-var hostRule = regexp.MustCompile("Host\\(\\s*(`[^`]+`|\"[^\"]+\")(?:\\s*,\\s*(`[^`]+`|\"[^\"]+\"))*\\s*\\)")
-var pathRule = regexp.MustCompile("PathPrefix\\(\\s*(`[^`]+`|\"[^\"]+\")\\s*\\)")
-var quoted = regexp.MustCompile("`([^`]+)`|\"([^\"]+)\"")
-
 func dockerSnapshot(ctx context.Context, p provider) ([]observation, string, error) {
-	u, err := url.Parse(p.Endpoint)
+	client, err := newProviderClient(p)
 	if err != nil {
 		return nil, "", err
 	}
-	transport := &http.Transport{Proxy: nil}
-	defer transport.CloseIdleConnections()
-	base := strings.TrimRight(p.Endpoint, "/")
-	if u.Scheme == "unix" {
-		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "unix", u.Path)
-		}
-		base = "http://docker"
-	}
-	client := &http.Client{Transport: transport, Timeout: 12 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	defer client.Close()
 	// ponytail: Docker API v1.44 (Engine 25+); negotiate /version if older daemon support is needed.
-	req, err := http.NewRequestWithContext(ctx, "GET", base+"/v1.44/containers/json?all=true", nil)
-	if err != nil {
-		return nil, "", err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("Docker connection failed: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, "", fmt.Errorf("Docker API returned %s", res.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(res.Body, (8<<20)+1))
-	if err != nil {
-		return nil, "", err
-	}
-	if len(data) > 8<<20 {
-		return nil, "", fmt.Errorf("Docker snapshot exceeds 8 MiB")
-	}
 	var containers []container
-	if err = json.Unmarshal(data, &containers); err != nil {
-		return nil, "", fmt.Errorf("Invalid Docker response: %w", err)
+	if err = client.Get(ctx, "/v1.44/containers/json?all=true", &containers); err != nil {
+		return nil, "", err
 	}
 	if containers == nil {
 		return nil, "", fmt.Errorf("Invalid Docker response: expected a container array")
@@ -303,13 +315,8 @@ func dockerSnapshot(ctx context.Context, p provider) ([]observation, string, err
 					continue
 				}
 				router := strings.TrimSuffix(strings.TrimPrefix(key, "traefik.http.routers."), ".rule")
-				host := hostRule.FindString(rule)
-				pathMatch := pathRule.FindStringSubmatch(rule)
-				// ponytail: resolve only Host AND optional PathPrefix; a full Traefik rule parser is needed for other expressions.
-				remaining := hostRule.ReplaceAllString(rule, "")
-				remaining = pathRule.ReplaceAllString(remaining, "")
-				remaining = strings.ReplaceAll(remaining, "&&", "")
-				if host == "" || strings.TrimSpace(remaining) != "" || len(hostRule.FindAllString(rule, -1)) != 1 || len(pathRule.FindAllString(rule, -1)) > 1 {
+				matches, err := traefikMatches(rule)
+				if err != nil {
 					unresolved++
 					continue
 				}
@@ -320,22 +327,13 @@ func dockerSnapshot(ctx context.Context, p provider) ([]observation, string, err
 						scheme = "https"
 					}
 				}
-				basePath := ""
-				if len(pathMatch) > 1 {
-					basePath = strings.Trim(pathMatch[1], "`\"")
+				port := 80
+				if scheme == "https" {
+					port = 443
 				}
-				if basePath != "" && !strings.HasPrefix(basePath, "/") {
-					unresolved++
-					continue
-				}
-				for i, m := range quoted.FindAllStringSubmatch(host, -1) {
-					hostname := m[1]
-					if hostname == "" {
-						hostname = m[2]
-					}
-					raw := scheme + "://" + hostname + basePath
-					if _, err := validURL(raw); err == nil {
-						routes[fmt.Sprintf("%s:%d", router, i)] = raw
+				for _, m := range matches {
+					if raw, ok := launchURL(scheme, m, port); ok {
+						routes[router+":"+m.Host+":"+m.Path] = raw
 					} else {
 						unresolved++
 					}
@@ -388,7 +386,7 @@ func dockerSnapshot(ctx context.Context, p provider) ([]observation, string, err
 	}
 	warning := ""
 	if unresolved > 0 {
-		warning = fmt.Sprintf("%d route(s) could not be resolved. Add apptrail.url or use Host with an optional PathPrefix.", unresolved)
+		warning = fmt.Sprintf("%d route(s) could not be resolved. Add apptrail.url or use literal Host, Path, and PathPrefix matchers.", unresolved)
 	}
 	return out, warning, nil
 }
