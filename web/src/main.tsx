@@ -73,6 +73,20 @@ type Provider = {
   error: string;
   count: number;
 };
+function sourceLabel(app: App, providers: Provider[]) {
+  const labels = [
+    ...new Set(
+      providers
+        .filter((p) => app.sources?.includes(p.id))
+        .map((p) => providerTypes[p.type || "docker"].label),
+    ),
+  ];
+  if (labels.length === 1) return labels[0];
+  if (labels.length > 1) return `${labels.length} providers`;
+  return app.sources?.some((id) => !id.startsWith("manual:"))
+    ? "Discovered"
+    : "Manual";
+}
 type Session = {
   version: string;
   authenticated: boolean;
@@ -613,6 +627,8 @@ function Workspace({
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
+  if (page === "Apps")
+    filtered.sort((a, b) => Number(!!b.url) - Number(!!a.url));
   const categories = [...new Set(base.map((a) => a.category))].sort();
   async function perform(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
@@ -1170,6 +1186,40 @@ function Workspace({
                                 a.name
                               )}
                             </h3>
+                            {a.url ? (
+                              <a
+                                className="card-launch-url"
+                                href={a.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={a.url}
+                              >
+                                {a.url}
+                              </a>
+                            ) : (
+                              <button
+                                className="card-missing-url"
+                                onClick={() =>
+                                  setModal({ type: "app", app: a })
+                                }
+                              >
+                                No launch URL discovered · Set URL
+                              </button>
+                            )}
+                            {a.fields?.router?.value && (
+                              <div className="card-route">
+                                <Icon name="provider-proxy" />
+                                <span>
+                                  Route <code>{a.fields.router.value}</code>
+                                  {a.fields.entrypoints?.value && (
+                                    <span className="route-entrypoints">
+                                      {" "}
+                                      · {a.fields.entrypoints.value}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )}
                             <p>
                               {a.description ||
                                 "A little piece of your self-hosted world."}
@@ -1222,13 +1272,7 @@ function Workspace({
                                     : "self-hosted"
                                 }
                               />
-                              <span>
-                                {a.sources?.some(
-                                  (s) => !s.startsWith("manual:"),
-                                )
-                                  ? "Discovered"
-                                  : "Manual"}
-                              </span>
+                              <span>{sourceLabel(a, providers)}</span>
                             </button>
                           </div>
                           {page === "Layout" && (

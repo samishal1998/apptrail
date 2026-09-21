@@ -54,6 +54,8 @@ Changing a page back to **Just me** blocks subsequent anonymous reads. Open publ
 
 ## Alternate launch addresses
 
+On **Apps**, entries with launch URLs appear first. Cards show their primary URL directly and, when available, the Traefik router and entrypoint. The source button identifies Docker, Caddy, or Traefik. A container without an inferred route explicitly shows **No launch URL discovered · Set URL**; it is not a failed Traefik route.
+
 The owner workspace groups Traefik hostname aliases for the same router/path into one card. Expand the card's **alternate addresses** to open another hostname. To change the main link, edit the app, select an address under **Available launch addresses**, and save.
 
 Only the primary launch URL is sent to public dashboard visitors. Changing the primary URL changes the link those visitors receive.

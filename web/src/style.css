@@ -1023,6 +1023,8 @@ select:focus-visible {
   gap: 17px;
 }
 .app-card {
+  display: flex;
+  flex-direction: column;
   position: relative;
   background: linear-gradient(130deg, #ffffff02, transparent), var(--at-panel);
   border: 1px solid var(--at-border);
@@ -1143,6 +1145,55 @@ select:focus-visible {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
+.card-launch-url {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  color: var(--at-accent-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.card-launch-url:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.card-missing-url {
+  display: block;
+  padding: 9px 0;
+  min-height: 44px;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--at-text-muted);
+  font-size: 11px;
+}
+.card-missing-url:hover {
+  color: var(--at-accent-soft);
+}
+.card-route {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--at-text-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.card-route .icon {
+  width: 13px;
+  height: 13px;
+  flex-basis: 13px;
+  margin-top: 1px;
+}
+.card-route code {
+  font: inherit;
+  color: var(--at-text);
+}
+[data-theme="apptrail-light"] .card-launch-url {
+  color: var(--at-accent-strong);
+}
 .card-tags {
   display: flex;
   gap: 6px;
@@ -1195,6 +1246,7 @@ select:focus-visible {
   flex-basis: 12px;
 }
 .card-footer {
+  margin-top: auto;
   border-top: 1px solid var(--at-border);
   display: flex;
   justify-content: space-between;
