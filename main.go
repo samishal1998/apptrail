@@ -59,7 +59,7 @@ func openStore(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	if schemaVersion > 1 {
+	if schemaVersion > 2 {
 		db.Close()
 		return nil, fmt.Errorf("database schema %d is newer than this Apptrail build", schemaVersion)
 	}
@@ -87,6 +87,29 @@ INSERT OR IGNORE INTO dashboards(id,name,slug) VALUES('home','Overview','home');
 		_, e = tx.Exec(`ALTER TABLE providers ADD COLUMN kind TEXT NOT NULL DEFAULT 'docker' CHECK(kind IN ('docker','caddy','traefik'));
 ALTER TABLE providers ADD COLUMN auth_file TEXT NOT NULL DEFAULT '';
 PRAGMA user_version=1;`)
+		if e == nil {
+			e = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
+	}
+	if schemaVersion < 2 {
+		tx, e := db.Begin()
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
+		_, e = tx.Exec(`ALTER TABLE dashboards ADD COLUMN layout TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE dashboards ADD COLUMN auto_rule TEXT NOT NULL DEFAULT '';
+ALTER TABLE dashboards ADD COLUMN auto_section TEXT NOT NULL DEFAULT 'main';
+ALTER TABLE dashboards ADD COLUMN excluded TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE dashboards ADD COLUMN rule_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE dashboards ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+PRAGMA user_version=2;`)
 		if e == nil {
 			e = tx.Commit()
 		} else {
@@ -250,6 +273,7 @@ func (s *server) routes() http.Handler {
 	m.HandleFunc("DELETE /api/providers/{id}", s.ownerOnly(s.deleteProvider))
 	m.HandleFunc("POST /api/providers/{id}/scan", s.ownerOnly(s.scanProviderHTTP))
 	m.HandleFunc("GET /api/dashboards", s.ownerOnly(s.listDashboards))
+	m.HandleFunc("POST /api/dashboards/rule-preview", s.ownerOnly(s.previewDashboardRule))
 	m.HandleFunc("POST /api/dashboards", s.ownerOnly(s.saveDashboard))
 	m.HandleFunc("PUT /api/dashboards/{id}", s.ownerOnly(s.saveDashboard))
 	m.HandleFunc("DELETE /api/dashboards/{id}", s.ownerOnly(s.deleteDashboard))
@@ -282,7 +306,8 @@ func (s *server) routes() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		// ponytail: this hash pins react-draggable's static selection CSS; recompute it if that dependency changes its stylesheet.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-s8oZn728h+t0WNV6s+2xieaG3i2RB5cO2MMiUDIdinY='; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		if r.Method != "GET" && r.Method != "HEAD" {
 			origin := r.Header.Get("Origin")
 			allowed := s.origin

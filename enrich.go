@@ -357,6 +357,7 @@ func (s *server) refreshApp(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	s.refreshDashboardRules(r.Context())
 	a, err := s.app(r.PathValue("id"))
 	if err != nil {
 		dbError(w, err)

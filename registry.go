@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -23,22 +24,23 @@ type observation struct {
 	AliasGroup bool            `json:"alias_group,omitempty"`
 }
 type application struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	URL         string          `json:"url"`
-	URLs        []string        `json:"urls"`
-	Description string          `json:"description"`
-	Icon        string          `json:"icon"`
-	Category    string          `json:"category"`
-	Health      string          `json:"health"`
-	Lifecycle   string          `json:"lifecycle"`
-	Favorite    bool            `json:"favorite"`
-	Hidden      bool            `json:"hidden"`
-	Created     int64           `json:"created"`
-	Seen        int64           `json:"seen"`
-	Sources     []string        `json:"sources"`
-	Fields      map[string]fact `json:"fields"`
-	ProbeError  string          `json:"probe_error,omitempty"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	URL           string          `json:"url"`
+	URLs          []string        `json:"urls"`
+	Description   string          `json:"description"`
+	Icon          string          `json:"icon"`
+	Category      string          `json:"category"`
+	Health        string          `json:"health"`
+	Lifecycle     string          `json:"lifecycle"`
+	Favorite      bool            `json:"favorite"`
+	Hidden        bool            `json:"hidden"`
+	Created       int64           `json:"created"`
+	Seen          int64           `json:"seen"`
+	Sources       []string        `json:"sources"`
+	ActiveSources []string        `json:"active_sources"`
+	Fields        map[string]fact `json:"fields"`
+	ProbeError    string          `json:"probe_error,omitempty"`
 }
 type override struct {
 	Name        *string `json:"name,omitempty"`
@@ -144,7 +146,11 @@ func (s *server) reconcile(provider string, observations []observation) error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	s.refreshDashboardRules(context.Background())
+	return nil
 }
 func (s *server) apps() ([]application, error) {
 	rows, err := s.db.Query("SELECT id,created,overrides FROM applications ORDER BY created,id")
@@ -172,6 +178,7 @@ func (s *server) apps() ([]application, error) {
 		a.Fields = map[string]fact{}
 		currentFacts[a.ID] = map[string]fact{}
 		a.Sources = []string{}
+		a.ActiveSources = []string{}
 		a.Health = "unknown"
 		a.Lifecycle = "missing"
 		positions[a.ID] = len(apps)
@@ -209,6 +216,9 @@ func (s *server) apps() ([]application, error) {
 			}
 			if present {
 				a.Lifecycle = "present"
+				if !contains(a.ActiveSources, provider) {
+					a.ActiveSources = append(a.ActiveSources, provider)
+				}
 			}
 			if seen > a.Seen {
 				a.Seen = seen
@@ -442,6 +452,7 @@ func (s *server) updateApp(w http.ResponseWriter, r *http.Request) {
 	if !changed(w, res, err) {
 		return
 	}
+	s.refreshDashboardRules(r.Context())
 	a, err := s.app(appID)
 	if err != nil {
 		dbError(w, err)
@@ -460,7 +471,7 @@ func (s *server) deleteApp(w http.ResponseWriter, r *http.Request) {
 	if !changed(w, res, err) {
 		return
 	}
-	if _, err = tx.Exec("UPDATE dashboards SET items=(SELECT json_group_array(value) FROM json_each(dashboards.items) WHERE value!=?)", r.PathValue("id")); err == nil {
+	if err = rewriteDashboardReferences(tx, []string{r.PathValue("id")}, ""); err == nil {
 		err = tx.Commit()
 	}
 	if err != nil {
@@ -471,15 +482,21 @@ func (s *server) deleteApp(w http.ResponseWriter, r *http.Request) {
 }
 
 type dashboard struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Slug   string   `json:"slug"`
-	Public bool     `json:"public"`
-	Items  []string `json:"items"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Slug        string           `json:"slug"`
+	Public      bool             `json:"public"`
+	Items       []string         `json:"items"`
+	Layout      *dashboardLayout `json:"layout"`
+	AutoRule    *string          `json:"auto_rule"`
+	AutoSection string           `json:"auto_section"`
+	Excluded    []string         `json:"excluded"`
+	RuleError   string           `json:"rule_error"`
+	Revision    *int64           `json:"revision"`
 }
 
 func (s *server) dashboards() ([]dashboard, error) {
-	rows, err := s.db.Query("SELECT id,name,slug,public,items FROM dashboards ORDER BY rowid")
+	rows, err := s.db.Query("SELECT id,name,slug,public,items,layout,auto_rule,auto_section,excluded,rule_error,revision FROM dashboards ORDER BY rowid")
 	if err != nil {
 		return nil, err
 	}
@@ -487,11 +504,11 @@ func (s *server) dashboards() ([]dashboard, error) {
 	out := []dashboard{}
 	for rows.Next() {
 		var d dashboard
-		var raw string
-		if err = rows.Scan(&d.ID, &d.Name, &d.Slug, &d.Public, &raw); err != nil {
+		var raw, layout, excluded string
+		if err = rows.Scan(&d.ID, &d.Name, &d.Slug, &d.Public, &raw, &layout, &d.AutoRule, &d.AutoSection, &excluded, &d.RuleError, &d.Revision); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal([]byte(raw), &d.Items); err != nil {
+		if err = decodeDashboard(&d, raw, layout, excluded); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -529,6 +546,73 @@ func (s *server) saveDashboard(w http.ResponseWriter, r *http.Request) {
 	if d.Items == nil {
 		d.Items = []string{}
 	}
+	var previous *dashboard
+	if r.Method != "POST" {
+		ds, err := s.dashboards()
+		if err != nil {
+			dbError(w, err)
+			return
+		}
+		for i := range ds {
+			if ds[i].ID == r.PathValue("id") {
+				previous = &ds[i]
+				break
+			}
+		}
+		if previous == nil {
+			notFound(w)
+			return
+		}
+		if d.Revision != nil && *d.Revision != *previous.Revision {
+			fail(w, 409, "Dashboard changed while you were editing. Reload its latest layout and try again.")
+			return
+		}
+		if d.Layout == nil {
+			d.Layout = previous.Layout
+		}
+		if d.AutoRule == nil {
+			d.AutoRule = previous.AutoRule
+		}
+		if d.AutoSection == "" {
+			d.AutoSection = previous.AutoSection
+		}
+		if d.Excluded == nil {
+			d.Excluded = previous.Excluded
+		}
+	}
+	if d.AutoRule == nil {
+		d.AutoRule = new(string)
+	}
+	*d.AutoRule = strings.TrimSpace(*d.AutoRule)
+	if d.Excluded == nil {
+		d.Excluded = []string{}
+	}
+	if len(d.Excluded) > 1000 {
+		fail(w, 400, "Too many rule exclusions")
+		return
+	}
+	if previous != nil && *d.AutoRule != "" {
+		for _, id := range previous.Items {
+			if !contains(d.Items, id) && !contains(d.Excluded, id) {
+				d.Excluded = append(d.Excluded, id)
+			}
+		}
+	}
+	excluded := []string{}
+	for _, id := range d.Excluded {
+		if !contains(d.Items, id) && !contains(excluded, id) {
+			excluded = append(excluded, id)
+		}
+	}
+	d.Excluded = excluded
+	if len(d.Excluded) > 1000 {
+		fail(w, 400, "Too many rule exclusions; reset exclusions in Page settings before removing more apps")
+		return
+	}
+	if err := normalizeLayout(&d); err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
 	apps, err := s.apps()
 	if err != nil {
 		dbError(w, err)
@@ -547,6 +631,20 @@ func (s *server) saveDashboard(w http.ResponseWriter, r *http.Request) {
 		seen[id] = true
 	}
 	var duplicate int
+	if *d.AutoRule != "" && (previous == nil || *previous.AutoRule != *d.AutoRule) {
+		ps, err := s.providers()
+		if err != nil {
+			dbError(w, err)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		_, err = evaluateDashboardRule(ctx, *d.AutoRule, apps, ps)
+		cancel()
+		if err != nil {
+			fail(w, 400, err.Error())
+			return
+		}
+	}
 	err = s.db.QueryRow("SELECT COUNT(*) FROM dashboards WHERE slug=? AND id!=?", d.Slug, r.PathValue("id")).Scan(&duplicate)
 	if err != nil {
 		dbError(w, err)
@@ -556,14 +654,34 @@ func (s *server) saveDashboard(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, "That public URL is already in use")
 		return
 	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		dbError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	var existingItems int
+	if err = tx.QueryRow("SELECT COUNT(*) FROM json_each(?) i JOIN applications a ON a.id=i.value", encode(d.Items)).Scan(&existingItems); err != nil {
+		dbError(w, err)
+		return
+	}
+	if existingItems != len(d.Items) {
+		fail(w, 409, "The app registry changed while saving. Reload and try again.")
+		return
+	}
 	if r.Method == "POST" {
 		d.ID = id()
-		_, err = s.db.Exec("INSERT INTO dashboards(id,name,slug,public,items) VALUES(?,?,?,?,?)", d.ID, strings.TrimSpace(d.Name), d.Slug, d.Public, encode(d.Items))
+		_, err = tx.Exec("INSERT INTO dashboards(id,name,slug,public,items,layout,auto_rule,auto_section,excluded) VALUES(?,?,?,?,?,?,?,?,?)", d.ID, strings.TrimSpace(d.Name), d.Slug, d.Public, encode(d.Items), encode(d.Layout), *d.AutoRule, d.AutoSection, encode(d.Excluded))
 	} else {
 		d.ID = r.PathValue("id")
 		var res sql.Result
-		res, err = s.db.Exec("UPDATE dashboards SET name=?,slug=?,public=?,items=? WHERE id=?", strings.TrimSpace(d.Name), d.Slug, d.Public, encode(d.Items), d.ID)
-		if !changed(w, res, err) {
+		res, err = tx.Exec("UPDATE dashboards SET name=?,slug=?,public=?,items=?,layout=?,auto_rule=?,auto_section=?,excluded=?,rule_error='',revision=revision+1 WHERE id=? AND revision=?", strings.TrimSpace(d.Name), d.Slug, d.Public, encode(d.Items), encode(d.Layout), *d.AutoRule, d.AutoSection, encode(d.Excluded), d.ID, *previous.Revision)
+		if err != nil {
+			dbError(w, err)
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			fail(w, 409, "Dashboard changed while saving. Reload and try again.")
 			return
 		}
 	}
@@ -571,7 +689,23 @@ func (s *server) saveDashboard(w http.ResponseWriter, r *http.Request) {
 		dbError(w, err)
 		return
 	}
-	reply(w, d)
+	if err = tx.Commit(); err != nil {
+		dbError(w, err)
+		return
+	}
+	s.refreshDashboardRules(r.Context())
+	ds, err := s.dashboards()
+	if err != nil {
+		dbError(w, err)
+		return
+	}
+	for _, current := range ds {
+		if current.ID == d.ID {
+			reply(w, current)
+			return
+		}
+	}
+	notFound(w)
 }
 func (s *server) deleteDashboard(w http.ResponseWriter, r *http.Request) {
 	if r.PathValue("id") == "home" {
@@ -625,7 +759,20 @@ func (s *server) publicDashboard(w http.ResponseWriter, r *http.Request) {
 			out = append(out, publicApp(a))
 		}
 	}
-	reply(w, map[string]any{"name": d.Name, "slug": d.Slug, "apps": out})
+	publicLayout := dashboardLayout{Sections: []dashboardSection{}, Tiles: map[string]dashboardTile{}}
+	for _, section := range d.Layout.Sections {
+		used := false
+		for _, id := range d.Items {
+			if _, ok := byID[id]; ok && d.Layout.Tiles[id].Section == section.ID {
+				publicLayout.Tiles[id] = d.Layout.Tiles[id]
+				used = true
+			}
+		}
+		if used {
+			publicLayout.Sections = append(publicLayout.Sections, section)
+		}
+	}
+	reply(w, map[string]any{"name": d.Name, "slug": d.Slug, "apps": out, "layout": publicLayout})
 }
 func (s *server) isPublicApp(appID string) bool {
 	ds, err := s.dashboards()

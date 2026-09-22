@@ -9,16 +9,38 @@ description: Create private or public dashboard pages, arrange cards, and contro
 
 From **Overview**, use the dashboard selector to switch pages. Choose **New page** to create another view over the same registry.
 
-Each page has its own name, URL slug, visibility, app selection, and card order. The default page can be renamed but not deleted.
+Each page has its own name, URL slug, visibility, app selection, sections, tile geometry, and optional CEL auto-add rule. The default page can be renamed but not deleted.
 
 ## Choose and arrange apps
 
 1. Select a dashboard.
 2. Open **Choose apps**.
 3. Select the apps you want on it and save.
-4. Open **Layout** to reorder them.
+4. Open **Layout** to arrange them.
 
-Drag cards on desktop, or use the earlier/later buttons for keyboard and touchscreen access. The responsive grid keeps one persistent ordering across screen sizes; freely resized or independently positioned tiles are not part of this release.
+In v0.5+, pages support **named sections and resizable grids**:
+
+- Use **Add section**, edit its name inline, and move it up/down to change reading order.
+- Drag a card's **Move** handle to change its grid position within a section.
+- Resize from its bottom-right corner.
+- Drag **To section** onto another section to transfer a card.
+- Open **Size & position** for keyboard-accessible section, column, row, width, and height controls. Changing the section this way also works on touchscreens.
+
+Changes save automatically. Removing a section moves its cards into the first remaining section and updates an auto-add destination if necessary. It does not delete the applications.
+
+The desktop grid has 12 columns. Widths range from 3–12 columns and heights from 4–20 grid rows. Each row is 60 pixels, with 16-pixel gutters. Below 640 pixels of available grid width, cards stack in section/position order with natural heights. Small-screen size controls edit the saved desktop geometry.
+
+Saved sections and positions are also used on public pages, with editing controls removed. Empty sections containing no publicly visible apps are omitted from public responses. Pages allow up to 32 sections and 1,000 apps.
+
+## Automatically include matching apps
+
+Open **Page settings → Auto-add rule (CEL)**. For example:
+
+```text title="CEL"
+url != "" && "traefik" in provider_types
+```
+
+Preview matching apps and choose a destination section before saving. Existing layouts stay put as new matches arrive. Rules are add-only; manual removals become exclusions. See the [CEL rule guide](../auto-add/) for fields, examples, and publication behavior.
 
 ## Private by default
 

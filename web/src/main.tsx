@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  DashboardCanvas,
+  type Dashboard,
+  type PageLayout,
+} from "./dashboard-layout";
 import "../../apptrail_working_pack/themes/apptrail-dark.css";
 import "../../apptrail_working_pack/themes/apptrail-light.css";
 import "./style.css";
@@ -21,13 +26,6 @@ type App = {
   sources?: string[];
   fields?: Record<string, { value: string; priority: number; source: string }>;
   probe_error?: string;
-};
-type Dashboard = {
-  id: string;
-  name: string;
-  slug: string;
-  public: boolean;
-  items: string[];
 };
 type ProviderType = "docker" | "caddy" | "traefik";
 const providerTypes = {
@@ -562,7 +560,8 @@ function Workspace({
   );
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
-  const [dragID, setDragID] = useState("");
+  const editingLayout = useRef(false);
+  editingLayout.current = page === "Layout";
   const searchRef = useRef<HTMLInputElement>(null);
   const refresh = useCallback(async () => {
     const [a, d, p, s] = await Promise.all([
@@ -584,7 +583,9 @@ function Workspace({
         if (e.message === "Sign in to continue") expired();
       });
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(() => {
+      if (!editingLayout.current) load();
+    }, 30000);
     return () => clearInterval(t);
   }, [refresh, expired]);
   useEffect(() => {
@@ -614,18 +615,19 @@ function Workspace({
   const ordered = active
     ? active.items
         .map((id) => apps.find((a) => a.id === id))
-        .filter((a): a is App => !!a && !a.hidden)
+        .filter((a): a is App => !!a && (page === "Layout" || !a.hidden))
     : [];
   const onDashboard = page === "Overview" || page === "Layout";
   const base = onDashboard ? ordered : page === "Discover" ? unresolved : apps;
   const filtered = base.filter(
     (a) =>
-      (filter === "Hidden" ? a.hidden : !a.hidden) &&
-      (filter !== "Favorites" || a.favorite) &&
-      (category === "All categories" || a.category === category) &&
-      `${a.name} ${a.description} ${a.category} ${a.url} ${(a.urls || []).join(" ")} ${(a.sources || []).map((id) => providers.find((p) => p.id === id)?.name || id).join(" ")}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+      page === "Layout" ||
+      ((filter === "Hidden" ? a.hidden : !a.hidden) &&
+        (filter !== "Favorites" || a.favorite) &&
+        (category === "All categories" || a.category === category) &&
+        `${a.name} ${a.description} ${a.category} ${a.url} ${(a.urls || []).join(" ")} ${(a.sources || []).map((id) => providers.find((p) => p.id === id)?.name || id).join(" ")}`
+          .toLowerCase()
+          .includes(query.toLowerCase())),
   );
   if (page === "Apps")
     filtered.sort((a, b) => Number(!!b.url) - Number(!!a.url));
@@ -651,16 +653,20 @@ function Workspace({
     setCategory("All categories");
     setFilter("All apps");
   }
-  async function reorder(from: string, to: string) {
-    if (!active || from === to) return;
-    const items = [...active.items];
-    const i = items.indexOf(from);
-    const j = items.indexOf(to);
-    if (i < 0 || j < 0) return;
-    items.splice(i, 1);
-    items.splice(j, 0, from);
-    await perform(
-      () => api(`/dashboards/${active.id}`, "PUT", { ...active, items }),
+  async function saveLayout(layout: PageLayout, revision: number) {
+    if (!active) return false;
+    return perform(
+      () =>
+        api(`/dashboards/${active.id}`, "PUT", {
+          ...active,
+          layout,
+          revision,
+          auto_section: layout.sections.some(
+            (s) => s.id === active.auto_section,
+          )
+            ? active.auto_section
+            : layout.sections[0].id,
+        }),
       "Layout saved",
     );
   }
@@ -807,7 +813,7 @@ function Workspace({
             </div>
           ) : (
             <>
-              {onDashboard ? (
+              {page === "Overview" ? (
                 <>
                   <section className="welcome">
                     <div className="welcome-copy">
@@ -913,7 +919,9 @@ function Workspace({
                           ? "Nothing gets left behind."
                           : page === "Providers"
                             ? "Connected to your infrastructure."
-                            : "Make yourself at home."}
+                            : page === "Layout"
+                              ? "Arrange your dashboard."
+                              : "Make yourself at home."}
                     </h1>
                     <p>
                       {page === "Apps"
@@ -922,7 +930,9 @@ function Workspace({
                           ? "Inspect apps with unresolved URLs or missing infrastructure."
                           : page === "Providers"
                             ? "Connect Docker, Caddy, and Traefik to discover your applications."
-                            : "A few thoughtful defaults. The rest is up to you."}
+                            : page === "Layout"
+                              ? "Create sections, move cards, and make room for what matters."
+                              : "A few thoughtful defaults. The rest is up to you."}
                     </p>
                   </div>
                   <div className="heading-actions">
@@ -1011,62 +1021,68 @@ function Workspace({
                       </div>
                     )}
                   </div>
-                  <div className="filterbar">
-                    <div
-                      className="filter-tabs"
-                      role="group"
-                      aria-label="App visibility filter"
-                    >
-                      {(onDashboard
-                        ? ["All apps", "Favorites"]
-                        : ["All apps", "Favorites", "Hidden"]
-                      ).map((f) => (
-                        <button
-                          key={f}
-                          className={filter === f ? "selected" : ""}
-                          aria-pressed={filter === f}
-                          onClick={() => setFilter(f)}
-                        >
-                          {f === "Favorites" && <Icon name="favorite" />}
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="search-controls">
-                      <div className="search">
-                        <Icon name="search" />
-                        <input
-                          ref={searchRef}
-                          aria-label="Search applications"
-                          placeholder="Search your apps…"
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                        />
-                        <kbd>/</kbd>
-                      </div>
-                      <label className="category-select">
-                        <Icon name="filter" />
-                        <span className="sr-only">Filter by category</span>
-                        <select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                        >
-                          <option>All categories</option>
-                          {categories.map((c) => (
-                            <option key={c}>{c}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                  {page === "Layout" && (
-                    <p className="info-line">
-                      <Icon name="grip" />
-                      Drag cards to reorder, or use their move buttons. Changes
-                      are saved automatically.
+                  {active?.rule_error && onDashboard && (
+                    <p className="form-error" role="alert">
+                      Auto-add rule: {active.rule_error}
                     </p>
                   )}
-                  {filtered.length === 0 ? (
+                  {onDashboard && active?.auto_rule && (
+                    <p className="info-line">
+                      <Icon name="discover" />
+                      CEL auto-add is enabled for this page.
+                    </p>
+                  )}
+                  {page !== "Layout" && (
+                    <div className="filterbar">
+                      <div
+                        className="filter-tabs"
+                        role="group"
+                        aria-label="App visibility filter"
+                      >
+                        {(onDashboard
+                          ? ["All apps", "Favorites"]
+                          : ["All apps", "Favorites", "Hidden"]
+                        ).map((f) => (
+                          <button
+                            key={f}
+                            className={filter === f ? "selected" : ""}
+                            aria-pressed={filter === f}
+                            onClick={() => setFilter(f)}
+                          >
+                            {f === "Favorites" && <Icon name="favorite" />}
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="search-controls">
+                        <div className="search">
+                          <Icon name="search" />
+                          <input
+                            ref={searchRef}
+                            aria-label="Search applications"
+                            placeholder="Search your apps…"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                          />
+                          <kbd>/</kbd>
+                        </div>
+                        <label className="category-select">
+                          <Icon name="filter" />
+                          <span className="sr-only">Filter by category</span>
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                          >
+                            <option>All categories</option>
+                            {categories.map((c) => (
+                              <option key={c}>{c}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  {filtered.length === 0 && page !== "Layout" ? (
                     <Empty
                       icon={apps.length ? "search" : "discover"}
                       title={
@@ -1119,28 +1135,20 @@ function Workspace({
                             : "Connect a Docker provider to discover your services, or add your first app by hand."}
                     </Empty>
                   ) : (
-                    <div
-                      className={`app-grid ${page === "Layout" ? "layout-grid" : ""}`}
+                    <DashboardCanvas
+                      key={active?.id || page}
+                      dashboard={onDashboard ? active : undefined}
+                      editing={page === "Layout"}
+                      busy={busy}
+                      onSave={saveLayout}
+                      names={Object.fromEntries(
+                        apps.map((a) => [a.id, a.name]),
+                      )}
                     >
-                      {filtered.map((a, i) => (
+                      {filtered.map((a) => (
                         <div
                           key={a.id}
-                          draggable={page === "Layout" && !busy}
-                          onDragStart={(e) => {
-                            setDragID(a.id);
-                            e.dataTransfer.setData("text/plain", a.id);
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragOver={(e) => {
-                            if (page === "Layout") e.preventDefault();
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (page === "Layout") reorder(dragID, a.id);
-                            setDragID("");
-                          }}
-                          onDragEnd={() => setDragID("")}
-                          className={`app-card ${a.hidden ? "hidden-card" : ""} ${dragID === a.id ? "dragging" : ""}`}
+                          className={`app-card ${a.hidden ? "hidden-card" : ""}`}
                         >
                           <div className="card-top">
                             <AppIcon app={a} />
@@ -1275,37 +1283,9 @@ function Workspace({
                               <span>{sourceLabel(a, providers)}</span>
                             </button>
                           </div>
-                          {page === "Layout" && (
-                            <div className="reorder-controls">
-                              <span>
-                                <Icon name="grip" />
-                                Position {i + 1}
-                              </span>
-                              <button
-                                className="icon-button"
-                                disabled={busy || i === 0}
-                                aria-label={`Move ${a.name} earlier`}
-                                onClick={() =>
-                                  reorder(a.id, filtered[i - 1].id)
-                                }
-                              >
-                                <Icon name="up" />
-                              </button>
-                              <button
-                                className="icon-button"
-                                disabled={busy || i === filtered.length - 1}
-                                aria-label={`Move ${a.name} later`}
-                                onClick={() =>
-                                  reorder(a.id, filtered[i + 1].id)
-                                }
-                              >
-                                <Icon name="down" />
-                              </button>
-                            </div>
-                          )}
                         </div>
                       ))}
-                    </div>
+                    </DashboardCanvas>
                   )}
                   <div className="section-foot">
                     <span>
@@ -1622,6 +1602,154 @@ function Workspace({
         />
       )}
     </div>
+  );
+}
+
+function DashboardRuleFields({ dashboard }: { dashboard?: Dashboard }) {
+  const [rule, setRule] = useState(dashboard?.auto_rule || "");
+  const [preview, setPreview] = useState<{
+    count: number;
+    matches: { id: string; name: string; url: string }[];
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const sections = dashboard?.layout.sections || [
+    { id: "main", name: "General" },
+  ];
+  return (
+    <section className="rule-editor">
+      <h3>Automatically add matching apps</h3>
+      <p>Use a CEL expression. Leave it empty for a manually curated page.</p>
+      <label>
+        Auto-add rule (CEL)
+        <textarea
+          name="auto_rule"
+          value={rule}
+          maxLength={4096}
+          rows={4}
+          spellCheck={false}
+          placeholder={'url != "" && "traefik" in provider_types'}
+          onChange={(e) => {
+            setRule(e.target.value);
+            setPreview(null);
+            setError("");
+          }}
+        />
+      </label>
+      <div className="rule-examples">
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => {
+            setRule('url != ""');
+            setPreview(null);
+          }}
+        >
+          All launchable apps
+        </button>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => {
+            setRule('url != "" && "traefik" in provider_types');
+            setPreview(null);
+          }}
+        >
+          Traefik apps
+        </button>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => {
+            setRule('category == "Media"');
+            setPreview(null);
+          }}
+        >
+          Media category
+        </button>
+      </div>
+      <label>
+        Add matches to section
+        <select
+          name="auto_section"
+          className="provider-type-select"
+          defaultValue={dashboard?.auto_section || sections[0].id}
+        >
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <small>
+        Fields: name, description, url, urls, host, path, category, health,
+        lifecycle, favorite, hidden, provider_types, provider_ids, facts.
+      </small>
+      <button
+        type="button"
+        className="button compact"
+        disabled={loading || !rule.trim()}
+        onClick={async () => {
+          setLoading(true);
+          setError("");
+          setPreview(null);
+          try {
+            setPreview(await api("/dashboards/rule-preview", "POST", { rule }));
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setLoading(false);
+          }
+        }}
+      >
+        {loading ? "Checking…" : "Preview matching apps"}
+      </button>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {preview && (
+        <div className="rule-preview" role="status">
+          <strong>
+            {preview.count} matching {preview.count === 1 ? "app" : "apps"}
+          </strong>
+          <ul>
+            {preview.matches.map((a) => (
+              <li key={a.id}>
+                <span>
+                  {a.name}
+                  <small>{a.url || "No launch URL"}</small>
+                </span>
+                <span>
+                  {dashboard?.excluded.includes(a.id)
+                    ? "Excluded"
+                    : dashboard?.items.includes(a.id)
+                      ? "Already on page"
+                      : "Will be added"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!dashboard?.excluded.length && (
+        <label className="checkbox-line">
+          <input type="checkbox" name="reset_exclusions" />
+          Reset {dashboard.excluded.length} manually excluded{" "}
+          {dashboard.excluded.length === 1 ? "app" : "apps"}
+        </label>
+      )}
+      <p className="field-note">
+        Rules add present, non-hidden apps without removing existing cards.
+        Manual removals stay excluded. On public pages, new matches are
+        immediately visible to visitors.
+      </p>
+      {dashboard?.rule_error && (
+        <p className="form-error">Last evaluation: {dashboard.rule_error}</p>
+      )}
+    </section>
   );
 }
 
@@ -2022,9 +2150,13 @@ function Editor({
                 d ? `/dashboards/${d.id}` : "/dashboards",
                 d ? "PUT" : "POST",
                 {
+                  ...d,
                   name: f.get("name"),
                   slug: f.get("slug"),
                   public: f.get("visibility") === "public",
+                  auto_rule: String(f.get("auto_rule") || ""),
+                  auto_section: String(f.get("auto_section") || "main"),
+                  excluded: f.has("reset_exclusions") ? [] : d?.excluded || [],
                   items:
                     d?.items.filter((id) => apps.some((a) => a.id === id)) ||
                     [],
@@ -2095,6 +2227,7 @@ function Editor({
             linked applications.
           </p>
           {formError}
+          <DashboardRuleFields dashboard={d} />
           {buttons(d ? "Save page" : "Create page")}
         </form>
         {d && d.id !== "home" && (
@@ -2125,7 +2258,7 @@ function Editor({
     return (
       <Dialog
         title="Make room for your favorites."
-        subtitle={`Choose the apps on ${modal.dashboard.name}. Reorder them in Layout.`}
+        subtitle={`Choose the apps on ${modal.dashboard.name}. Arrange sections and card sizes in Layout.`}
         close={close}
       >
         <form
@@ -2278,13 +2411,19 @@ function PublicPage({
   theme: string;
   toggleTheme: () => void;
 }) {
-  const [data, setData] = useState<{ name: string; apps: App[] } | null>(null);
+  const [data, setData] = useState<{
+    name: string;
+    apps: App[];
+    layout: PageLayout;
+  } | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
     let live = true;
     const load = () =>
-      api<{ name: string; apps: App[] }>(`/public/${encodeURIComponent(slug)}`)
+      api<{ name: string; apps: App[]; layout: PageLayout }>(
+        `/public/${encodeURIComponent(slug)}`,
+      )
         .then((d) => {
           if (live) {
             setData(d);
@@ -2370,7 +2509,9 @@ function PublicPage({
               </div>
             </div>
             {apps.length ? (
-              <div className="app-grid">
+              <DashboardCanvas
+                dashboard={{ id: slug, layout: data.layout, revision: 0 }}
+              >
                 {apps.map((a) => (
                   <article key={a.id} className="app-card public-card">
                     <div className="card-top">
@@ -2402,7 +2543,7 @@ function PublicPage({
                     </div>
                   </article>
                 ))}
-              </div>
+              </DashboardCanvas>
             ) : (
               <Empty
                 title={

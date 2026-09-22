@@ -20,6 +20,7 @@ export default defineConfig({
       { label: 'App guide', items: [
         { label: 'Apps & discovery', slug: 'guides/discovery' },
         { label: 'Dashboards & sharing', slug: 'guides/dashboards' },
+        { label: 'Auto-add rules (CEL)', slug: 'guides/auto-add' },
         { label: 'Metadata & health', slug: 'guides/metadata' },
         { label: 'Hosting & maintenance', slug: 'guides/hosting' },
         { label: 'Troubleshooting', slug: 'guides/troubleshooting' },

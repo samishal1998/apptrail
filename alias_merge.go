@@ -71,51 +71,10 @@ func mergeAliasApps(tx *sql.Tx, ids []string, source string) error {
 			*field.target = &value
 		}
 	}
-	rows, err := tx.Query("SELECT id,items FROM dashboards")
-	if err != nil {
+	if err := rewriteDashboardReferences(tx, ids, canonical); err != nil {
 		return err
 	}
-	updates := map[string]string{}
-	for rows.Next() {
-		var id, raw string
-		if err = rows.Scan(&id, &raw); err != nil {
-			rows.Close()
-			return err
-		}
-		var items []string
-		if err = json.Unmarshal([]byte(raw), &items); err != nil {
-			rows.Close()
-			return err
-		}
-		result := []string{}
-		changed := false
-		for _, item := range items {
-			if contains(ids, item) {
-				if item != canonical {
-					changed = true
-				}
-				item = canonical
-				if contains(result, item) {
-					changed = true
-					continue
-				}
-			}
-			result = append(result, item)
-		}
-		if changed {
-			updates[id] = encode(result)
-		}
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	for id, items := range updates {
-		if _, err = tx.Exec("UPDATE dashboards SET items=? WHERE id=?", items, id); err != nil {
-			return err
-		}
-	}
+	var err error
 	if _, err = tx.Exec("UPDATE applications SET overrides=? WHERE id=?", encode(merged), canonical); err != nil {
 		return err
 	}

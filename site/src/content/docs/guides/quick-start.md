@@ -42,7 +42,7 @@ Save the app. It appears in **Apps**, your complete application registry.
 
 Open **Overview → Choose apps**, select your applications, and save.
 
-Your registry and your dashboard are separate: discovery can add apps without rearranging your curated page. Add a newly discovered app to a page whenever you are ready.
+Your registry and your dashboard are separate: discovery can add apps without rearranging your curated page. Add a newly discovered app whenever you are ready, or configure a [CEL auto-add rule](../auto-add/) in Page settings to include matching apps automatically.
 
 ## 3. Make it your own
 
@@ -57,9 +57,9 @@ User preferences take precedence over later scans. Editing one field leaves the 
 
 ## 4. Put things in order
 
-Open **Layout** and choose the dashboard you want to arrange. Drag cards into position, or use each card's **earlier/later buttons** with a keyboard or touchscreen.
+Open **Layout** and choose the dashboard you want to arrange. Add named sections, drag **Move** to position cards, resize their corners, or drag **To section** to move between sections. **Size & position** provides equivalent form controls.
 
-The order is saved automatically. Apptrail uses an ordered responsive grid: columns adapt to the screen, while your chosen order stays the same.
+Sections and tile geometry are saved per dashboard. On small screens, cards stack in reading order. See [dashboard layouts](../dashboards/#choose-and-arrange-apps) for details.
 
 ## 5. Decide who can visit
 

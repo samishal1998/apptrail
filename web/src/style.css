@@ -868,6 +868,265 @@ select:focus-visible {
   font-weight: 550;
   letter-spacing: -0.4px;
 }
+.dashboard-canvas {
+  display: grid;
+  gap: 24px;
+}
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.canvas-toolbar p {
+  color: var(--at-text-muted);
+  font-size: 12px;
+  max-width: 680px;
+}
+.dashboard-section {
+  min-width: 0;
+  border-top: 1px solid var(--at-border);
+  padding-top: 18px;
+}
+.dashboard-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.dashboard-section-heading h3 {
+  font-size: 17px;
+  font-weight: 550;
+}
+.section-name {
+  color: var(--at-text);
+  font-size: 16px;
+  font-weight: 550;
+  background: var(--at-bg-elevated);
+  border: 1px solid var(--at-border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  width: 220px;
+  max-width: 100%;
+}
+.section-controls {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.dashboard-section.accepts-tile {
+  outline: 1px dashed var(--at-accent);
+  outline-offset: 8px;
+}
+.empty-section {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--at-border);
+  border-radius: 14px;
+  padding: 24px;
+  font-size: 12px;
+  color: var(--at-text-muted);
+}
+.section-grid {
+  min-width: 0;
+}
+.dashboard-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--at-radius-card);
+}
+.dashboard-tile:has(.tile-position-editor[open]) {
+  z-index: 20;
+}
+.tile-card-content {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+}
+.tile-card-content > .app-card {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.tile-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px;
+  background: var(--at-panel-strong);
+  border: 1px solid var(--at-border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 2;
+}
+.tile-tools > button,
+.tile-position-editor > summary {
+  font-size: 10px;
+  color: var(--at-text-muted);
+  background: transparent;
+  border: 0;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 7px;
+}
+.tile-grip {
+  cursor: grab;
+  touch-action: none;
+}
+.tile-grip:active {
+  cursor: grabbing;
+}
+.tile-transfer {
+  cursor: grab;
+}
+.tile-position-editor > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.tile-position-editor > summary:focus-visible {
+  outline: 2px solid var(--at-accent);
+}
+.tile-position-editor[open] {
+  z-index: 20;
+}
+.tile-position-editor form {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 45px);
+  background: var(--at-panel-strong);
+  border: 1px solid var(--at-border);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: var(--at-card-shadow);
+  z-index: 30;
+}
+.tile-position-editor select {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  background: var(--at-bg);
+  color: var(--at-text);
+  border: 1px solid var(--at-border);
+  border-radius: 8px;
+  margin-top: 6px;
+  padding: 8px;
+}
+.tile-dimensions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.tile-dimensions input {
+  min-width: 0;
+}
+.dashboard-canvas .react-grid-item.react-grid-placeholder {
+  background: var(--at-accent);
+  border-radius: var(--at-radius-card);
+  opacity: 0.14;
+}
+.dashboard-canvas .react-resizable-handle {
+  width: 28px;
+  height: 28px;
+  z-index: 5;
+}
+.dashboard-canvas .react-resizable-handle::after {
+  border-color: var(--at-accent-soft);
+}
+.dashboard-canvas .react-grid-item {
+  transition: none;
+}
+.mobile-section-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.stacked-tile {
+  min-width: 0;
+}
+.rule-editor {
+  border-top: 1px solid var(--at-border);
+  margin-top: 24px;
+  padding-top: 22px;
+}
+.rule-editor h3 {
+  font-size: 16px;
+  margin-bottom: 7px;
+}
+.rule-editor > p,
+.rule-editor > small {
+  color: var(--at-text-muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.rule-editor > p {
+  margin-bottom: 17px;
+}
+.rule-editor > small {
+  display: block;
+  margin-bottom: 15px;
+}
+.rule-editor textarea {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+.rule-examples {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -8px 0 12px;
+}
+.rule-preview {
+  background: var(--at-bg);
+  border: 1px solid var(--at-border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 14px 0;
+  font-size: 11px;
+}
+.rule-preview ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.rule-preview li {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--at-border);
+}
+.rule-preview li small {
+  display: block;
+  color: var(--at-text-muted);
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.rule-preview li > span:last-child {
+  color: var(--at-text-muted);
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .canvas-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .section-controls {
+    margin-left: 0;
+  }
+  .tile-tools > button,
+  .tile-position-editor > summary {
+    min-height: 44px;
+  }
+}
 .dashboard-select {
   background: transparent;
   border: 0;

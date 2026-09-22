@@ -13,7 +13,7 @@ curl -fsSL https://samishal1998.github.io/apptrail/install.sh | sh
 ~/.local/bin/apptrail service install
 ```
 
-The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.4.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
+The installer verifies SHA256 and the executable version, then installs atomically to `~/.local/bin`. It does not require root, edit your shell, or start a service. Pin a release or choose a different destination with `sh -s -- --version v0.5.0 --dir "$HOME/bin"`. Windows AMD64 ZIPs and manual downloads are on GitHub Releases.
 
 Run `apptrail --version` to inspect the installed version. See the [installation guide](https://samishal1998.github.io/apptrail/guides/installation/) and [service guide](https://samishal1998.github.io/apptrail/guides/services/) for setup and lifecycle commands.
 
@@ -76,13 +76,13 @@ docker compose logs apptrail
 
 Compose builds the local Dockerfile. It starts from Alpine and uses the verified CLI installer to download the released Linux AMD64/ARM64 executable. Only `compose.yaml` and `Dockerfile` are needed; application source and compilers are not part of the build. The named volume contains the registry, account, sessions, and dashboard state. The image runs as UID/GID 10001 and does not have Docker access until you explicitly configure an endpoint/mount.
 
-Optional Compose variables: `APPTRAIL_VERSION=v0.4.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
+Optional Compose variables: `APPTRAIL_VERSION=v0.5.0`, `APPTRAIL_PORT=8080`, and `APPTRAIL_ORIGIN=https://apptrail.example.com`. When following `latest`, upgrade using `docker compose build --pull --no-cache && docker compose up -d` so Docker reruns the installer instead of reusing its cached layer. Keep the same project name and data volume.
 
 The same standalone Dockerfile can also be built directly:
 
 ```sh
 curl -fsSL https://samishal1998.github.io/apptrail/dockerfile.txt -o Dockerfile
-docker build --build-arg APPTRAIL_VERSION=v0.4.0 -t apptrail:local .
+docker build --build-arg APPTRAIL_VERSION=v0.5.0 -t apptrail:local .
 ```
 
 The Dockerfile and Compose file are also attached to releases with checksums. The app runs in the foreground inside containers; Docker's restart policy manages its lifecycle.
@@ -105,12 +105,26 @@ The [discovery guide](https://samishal1998.github.io/apptrail/guides/discovery/#
 
 1. **Providers → Connect provider:** select Docker, Caddy, or Traefik, configure its API base endpoint and optional authorization file, then **Scan now**.
 2. **Apps:** inspect discovered applications or add manual entries. Favorite, rename, hide, and override icons here.
-3. **Overview → Choose apps:** choose exactly which apps appear on that dashboard page. New discovery does not rearrange your curated page.
-4. **Layout:** drag cards, or use the keyboard-accessible earlier/later buttons. Ordering persists independently for each page.
+3. **Overview → Choose apps:** select apps manually, or use **Page settings → Auto-add rule (CEL)** to add matching apps automatically into a chosen section.
+4. **Layout:** create named sections, drag and resize cards, and move cards between sections. Size & position controls work with a keyboard. Each page stores its own geometry; small screens stack cards in reading order.
 5. **Page settings:** rename a page, set its URL, and choose private or public. **New page** creates another dashboard over the same registry.
 6. **Settings:** switch themes, update your password, or enable private-network metadata probes for LAN/Tailscale services.
 
 Public pages live at `/d/<slug>`. Anonymous visitors receive only that page's visible app display fields, launch links, icons, and health. The global registry, providers, diagnostics, settings, and mutations require owner login. Hiding an app also removes it from public pages. Making a page private blocks subsequent anonymous API/icon requests; open public pages recheck every 30 seconds and when focused.
+
+### CEL auto-add rules and customizable pages (v0.5+)
+
+Each page can select apps with a CEL boolean expression, for example:
+
+```text
+url != "" && "traefik" in provider_types
+```
+
+Rules are validated, previewable, and evaluated after discovery and metadata changes. They only add present, non-hidden apps; they do not remove or reposition existing cards. Manual removals stay excluded until re-added or reset in Page settings. On public pages, qualifying apps are published immediately. Runtime errors retain existing membership and appear in dashboard diagnostics. Evaluation has expression-size, cost, and time limits.
+
+Layouts use named sections and a 12-column desktop grid with persisted positions/sizes. Cards can be dragged/resized within a section or transferred between sections, with form-based controls as an alternative. Public pages use the saved layout read-only. Revision checks prevent background auto-adds from being lost to stale layout saves.
+
+Upgrading to v0.5 adds dashboard columns to SQLite. Back up the data directory first. Existing pages retain their selected apps, receive an initial General section, and have auto-add disabled until configured. See the [CEL guide](https://samishal1998.github.io/apptrail/guides/auto-add/) and [layout guide](https://samishal1998.github.io/apptrail/guides/dashboards/).
 
 ## Docker discovery
 

@@ -251,6 +251,7 @@ func (s *server) scheduler(ctx context.Context) {
 				}
 			}
 			workers.Wait()
+			s.refreshDashboardRules(ctx)
 		}
 		select {
 		case <-ctx.Done():
