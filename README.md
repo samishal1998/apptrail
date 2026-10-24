@@ -17,7 +17,9 @@ read permissions. Share the export, not Steward's private state directory.
 Exports carry a versioned host/state identity, resource kind/scope, desired state,
 observations, and explicit coverage. Refresh within 15 minutes, manually or with
 an explicitly configured schedule. Missing, stale, partial, incompatible or
-duplicate-key exports retain previous observations. Dashboard preferences stay in
+duplicate-key exports retain previous observations. After the first observations,
+the provider remains bound to that exported host/state identity; use a new provider
+for a different source. Dashboard preferences stay in
 Apptrail, and this provider grants no infrastructure-control authority. Database
 schema 3 preserves existing providers while adding the new provider type.
 
