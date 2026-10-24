@@ -59,7 +59,7 @@ func openStore(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	if schemaVersion > 2 {
+	if schemaVersion > 3 {
 		db.Close()
 		return nil, fmt.Errorf("database schema %d is newer than this Apptrail build", schemaVersion)
 	}
@@ -110,6 +110,27 @@ ALTER TABLE dashboards ADD COLUMN excluded TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE dashboards ADD COLUMN rule_error TEXT NOT NULL DEFAULT '';
 ALTER TABLE dashboards ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
 PRAGMA user_version=2;`)
+		if e == nil {
+			e = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
+	}
+	if schemaVersion < 3 {
+		tx, e := db.Begin()
+		if e != nil {
+			db.Close()
+			return nil, e
+		}
+		_, e = tx.Exec(`CREATE TABLE providers_v3 (id TEXT PRIMARY KEY, name TEXT NOT NULL, endpoint TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, scanned INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', count INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'docker' CHECK(kind IN ('docker','caddy','traefik','steward')), auth_file TEXT NOT NULL DEFAULT '');
+INSERT INTO providers_v3 SELECT id,name,endpoint,enabled,scanned,error,count,kind,auth_file FROM providers;
+DROP TABLE providers;
+ALTER TABLE providers_v3 RENAME TO providers;
+PRAGMA user_version=3;`)
 		if e == nil {
 			e = tx.Commit()
 		} else {

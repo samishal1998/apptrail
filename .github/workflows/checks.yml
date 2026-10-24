@@ -2,7 +2,7 @@ name: Checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/complete-management]
   pull_request:
 
 permissions:

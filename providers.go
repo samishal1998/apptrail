@@ -87,8 +87,8 @@ func (s *server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	if p.Type == "" {
 		p.Type = "docker"
 	}
-	if p.Type != "docker" && p.Type != "caddy" && p.Type != "traefik" {
-		fail(w, 400, "Choose Docker, Caddy, or Traefik")
+	if p.Type != "docker" && p.Type != "caddy" && p.Type != "traefik" && p.Type != "steward" {
+		fail(w, 400, "Choose Docker, Caddy, Traefik, or Steward")
 		return
 	}
 	if len(p.Endpoint) > 2048 {
@@ -99,7 +99,21 @@ func (s *server) saveProvider(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "Authorization file must be an absolute path on the Apptrail server")
 		return
 	}
-	if err := validEndpoint(p.Endpoint); err != nil {
+	var endpointErr error
+	if p.Type == "steward" {
+		endpointErr = validStewardEndpoint(p.Endpoint)
+		if p.AuthFile != "" {
+			fail(w, 400, "Steward exports use local file permissions, not an API authorization file")
+			return
+		}
+	} else {
+		endpointErr = validEndpoint(p.Endpoint)
+	}
+	if endpointErr != nil {
+		if p.Type == "steward" {
+			fail(w, 400, "Use file:///absolute/path/to/steward-export.json on the Apptrail server")
+			return
+		}
 		fail(w, 400, "Use a unix:///absolute/socket path or an HTTP(S) API base URL without credentials, query parameters, or fragments")
 		return
 	}
@@ -201,6 +215,8 @@ func (s *server) scan(ctx context.Context, p provider) error {
 		obs, warning, err = caddySnapshot(ctx, p)
 	case "traefik":
 		obs, warning, err = traefikSnapshot(ctx, p)
+	case "steward":
+		obs, warning, err = stewardSnapshot(ctx, p)
 	default:
 		err = fmt.Errorf("unsupported provider type %q", p.Type)
 	}

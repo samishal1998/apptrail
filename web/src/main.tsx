@@ -27,8 +27,13 @@ type App = {
   fields?: Record<string, { value: string; priority: number; source: string }>;
   probe_error?: string;
 };
-type ProviderType = "docker" | "caddy" | "traefik";
+type ProviderType = "docker" | "caddy" | "traefik" | "steward";
 const providerTypes = {
+  steward: {
+    label: "Steward", name: "Steward", endpoint: "", endpointLabel: "Steward export file",
+    placeholder: "file:///srv/exports/steward.json", icon: "provider-proxy", summary: "Steward routes & services",
+    help: "Use a version-1 export file on the Apptrail server. Refresh exports within 15 minutes; partial or stale snapshots preserve prior observations. Read-only integration.",
+  },
   docker: {
     label: "Docker",
     name: "Local Docker",
