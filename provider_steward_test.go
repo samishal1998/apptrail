@@ -100,4 +100,14 @@ func TestStewardPartialScanPreservesOverridesAndObservations(t *testing.T) {
 	if err != nil || len(apps) != 1 || apps[0].Name != "My worker" || !apps[0].Favorite || apps[0].Lifecycle != "present" {
 		t.Fatalf("partial input lost existing observation/preferences: %v %#v", err, apps)
 	}
+	value["complete"] = true
+	value["host_id"] = "different-host"
+	write()
+	if err = s.scan(context.Background(), p); err == nil {
+		t.Fatal("a different host's empty export replaced the existing source")
+	}
+	apps, err = s.apps()
+	if err != nil || len(apps) != 1 || apps[0].Lifecycle != "present" {
+		t.Fatal("host identity change lost previous observations")
+	}
 }

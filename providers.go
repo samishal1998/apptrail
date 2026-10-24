@@ -15,15 +15,16 @@ import (
 )
 
 type provider struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Endpoint string `json:"endpoint"`
-	Type     string `json:"type"`
-	AuthFile string `json:"auth_file"`
-	Enabled  bool   `json:"enabled"`
-	Scanned  int64  `json:"scanned"`
-	Error    string `json:"error"`
-	Count    int    `json:"count"`
+	stewardHost string
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Endpoint    string `json:"endpoint"`
+	Type        string `json:"type"`
+	AuthFile    string `json:"auth_file"`
+	Enabled     bool   `json:"enabled"`
+	Scanned     int64  `json:"scanned"`
+	Error       string `json:"error"`
+	Count       int    `json:"count"`
 }
 
 func (s *server) providers() ([]provider, error) {
@@ -216,6 +217,20 @@ func (s *server) scan(ctx context.Context, p provider) error {
 	case "traefik":
 		obs, warning, err = traefikSnapshot(ctx, p)
 	case "steward":
+		var previous string
+		lookupErr := s.db.QueryRow("SELECT source FROM observations WHERE provider=? ORDER BY source LIMIT 1", p.ID).Scan(&previous)
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			err = lookupErr
+			break
+		}
+		if previous != "" {
+			parts := strings.SplitN(previous, ":", 3)
+			if len(parts) != 3 || parts[0] != "steward" {
+				err = fmt.Errorf("Steward provider has incompatible prior source identity")
+				break
+			}
+			p.stewardHost = parts[1]
+		}
 		obs, warning, err = stewardSnapshot(ctx, p)
 	default:
 		err = fmt.Errorf("unsupported provider type %q", p.Type)

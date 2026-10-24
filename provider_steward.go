@@ -86,8 +86,11 @@ func stewardSnapshot(ctx context.Context, p provider) ([]observation, string, er
 	if decoder.Decode(new(any)) != io.EOF {
 		return nil, "", fmt.Errorf("Steward export must contain one JSON document")
 	}
-	if snapshot.Schema != "1" || snapshot.Kind != "steward.inventory" || !snapshot.Complete || snapshot.Host == "" || len(snapshot.Host) > 128 || len(snapshot.Resources) > 10000 || len(snapshot.Sources) > 256 {
+	if snapshot.Schema != "1" || snapshot.Kind != "steward.inventory" || !snapshot.Complete || !stewardIdentity(snapshot.Host, 128) || len(snapshot.Resources) > 10000 || len(snapshot.Sources) > 256 {
 		return nil, "", fmt.Errorf("Steward export is partial or incompatible; previous observations retained")
+	}
+	if p.stewardHost != "" && snapshot.Host != p.stewardHost {
+		return nil, "", fmt.Errorf("Steward export host/state identity changed; create a new provider to select that source")
 	}
 	now := time.Now().Unix()
 	if snapshot.Observed < now-15*60 || snapshot.Observed > now+300 {
@@ -101,7 +104,7 @@ func stewardSnapshot(ctx context.Context, p provider) ([]observation, string, er
 	observations := []observation{}
 	seen := map[string]bool{}
 	for _, r := range snapshot.Resources {
-		if (r.Kind != "route" && r.Kind != "service") || (r.Scope != "user" && r.Scope != "system") || !required(r.ID, 64) || !required(r.Name, 100) || r.Ownership != "owned_definition" {
+		if (r.Kind != "route" && r.Kind != "service") || (r.Scope != "user" && r.Scope != "system") || !stewardIdentity(r.ID, 64) || !required(r.Name, 100) || r.Ownership != "owned_definition" || (r.Kind == "route" && !stewardIdentity(r.Binding, 64)) || (r.Kind == "service" && r.Binding != "") {
 			return nil, "", fmt.Errorf("invalid Steward resource identity")
 		}
 		source := "steward:" + url.PathEscape(snapshot.Host) + ":" + r.Scope + ":" + r.Kind + ":" + url.PathEscape(r.Binding) + ":" + url.PathEscape(r.ID)
@@ -125,6 +128,18 @@ func stewardSnapshot(ctx context.Context, p provider) ([]observation, string, er
 		observations = append(observations, observation{Source: source, Keys: keys, Facts: facts, URLs: urls})
 	}
 	return observations, "Steward export snapshot; no control or ownership is transferred", nil
+}
+
+func stewardIdentity(value string, limit int) bool {
+	if value == "" || len(value) > limit {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func validateStewardJSON(data []byte) error {
