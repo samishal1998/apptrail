@@ -1,5 +1,26 @@
 # Apptrail
 
+## Steward export provider (development branch)
+
+The `feature/complete-management` branch adds a read-only **Steward** provider.
+With Steward 0.2.0-dev.1, run:
+
+```sh
+steward export --out /absolute/shared/steward.json
+```
+
+In Apptrail, add a Steward provider using
+`file:///absolute/shared/steward.json`. The path belongs to the Apptrail server;
+mount that export file read-only for a container and grant its process appropriate
+read permissions. Share the export, not Steward's private state directory.
+
+Exports carry a versioned host/state identity, resource kind/scope, desired state,
+observations, and explicit coverage. Refresh within 15 minutes, manually or with
+an explicitly configured schedule. Missing, stale, partial, incompatible or
+duplicate-key exports retain previous observations. Dashboard preferences stay in
+Apptrail, and this provider grants no infrastructure-control authority. Database
+schema 3 preserves existing providers while adding the new provider type.
+
 Discover, organize, and launch your self-hosted apps. Go + React/TypeScript + SQLite, with the built frontend embedded in one executable.
 
 **[Website & app guide](https://samishal1998.github.io/apptrail/)** · **[Downloads](https://github.com/samishal1998/apptrail/releases/latest)**
