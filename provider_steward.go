@@ -75,6 +75,9 @@ func stewardSnapshot(ctx context.Context, p provider) ([]observation, string, er
 		return nil, "", fmt.Errorf("Steward export exceeds its read budget")
 	}
 	var snapshot stewardExport
+	if err := validateStewardJSON(data); err != nil {
+		return nil, "", fmt.Errorf("invalid or duplicate-key Steward JSON")
+	}
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&snapshot); err != nil {
@@ -122,4 +125,58 @@ func stewardSnapshot(ctx context.Context, p provider) ([]observation, string, er
 		observations = append(observations, observation{Source: source, Keys: keys, Facts: facts, URLs: urls})
 	}
 	return observations, "Steward export snapshot; no control or ownership is transferred", nil
+}
+
+func validateStewardJSON(data []byte) error {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	nodes := 0
+	var visit func(int) error
+	visit = func(depth int) error {
+		nodes++
+		if depth > 64 || nodes > 100000 {
+			return fmt.Errorf("JSON budget exceeded")
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if delimiter, ok := token.(json.Delim); ok {
+			switch delimiter {
+			case '{':
+				seen := map[string]bool{}
+				for decoder.More() {
+					key, err := decoder.Token()
+					if err != nil {
+						return err
+					}
+					name, ok := key.(string)
+					if !ok || seen[name] {
+						return fmt.Errorf("duplicate object key")
+					}
+					seen[name] = true
+					if err = visit(depth + 1); err != nil {
+						return err
+					}
+				}
+			case '[':
+				for decoder.More() {
+					if err = visit(depth + 1); err != nil {
+						return err
+					}
+				}
+			default:
+				return fmt.Errorf("unexpected delimiter")
+			}
+			_, err = decoder.Token()
+			return err
+		}
+		return nil
+	}
+	if err := visit(0); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return fmt.Errorf("trailing JSON")
+	}
+	return nil
 }

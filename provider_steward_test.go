@@ -57,4 +57,47 @@ func TestStewardExportRetainsNativeIdentityAndRejectsPartialStaleInputs(t *testi
 	if validStewardEndpoint("file://other-host/private.json") == nil {
 		t.Fatal("remote file accepted")
 	}
+	if validateStewardJSON([]byte(`{"complete":true,"complete":false}`)) == nil {
+		t.Fatal("duplicate keys accepted")
+	}
+}
+
+func TestStewardPartialScanPreservesOverridesAndObservations(t *testing.T) {
+	s, _, _ := testServer(t)
+	path := filepath.Join(t.TempDir(), "export.json")
+	uPath := filepath.ToSlash(path)
+	if !strings.HasPrefix(uPath, "/") {
+		uPath = "/" + uPath
+	}
+	p := provider{ID: "steward", Name: "Steward", Type: "steward", Endpoint: (&url.URL{Scheme: "file", Path: uPath}).String(), Enabled: true}
+	insertProvider(t, s, p)
+	value := map[string]any{"schema_version": "1", "kind": "steward.inventory", "host_id": "host", "revision": "1", "observed_at": time.Now().Unix(), "complete": true, "sources": []any{}, "resources": []any{map[string]any{"kind": "service", "id": "worker", "binding": "", "scope": "user", "name": "Worker", "enabled": true, "ownership": "owned_definition", "observed": "running", "public_url": nil}}}
+	write := func() {
+		t.Helper()
+		b, _ := json.Marshal(value)
+		if err := os.WriteFile(path, b, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write()
+	if err := s.scan(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+	apps, err := s.apps()
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("%v %#v", err, apps)
+	}
+	if _, err = s.db.Exec("UPDATE applications SET overrides=? WHERE id=?", `{"name":"My worker","favorite":true}`, apps[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	value["complete"] = false
+	value["resources"] = []any{}
+	write()
+	if err = s.scan(context.Background(), p); err == nil {
+		t.Fatal("partial export scan succeeded")
+	}
+	apps, err = s.apps()
+	if err != nil || len(apps) != 1 || apps[0].Name != "My worker" || !apps[0].Favorite || apps[0].Lifecycle != "present" {
+		t.Fatalf("partial input lost existing observation/preferences: %v %#v", err, apps)
+	}
 }

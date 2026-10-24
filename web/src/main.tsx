@@ -2083,7 +2083,7 @@ function Editor({
             />
             <small>{providerTypes[providerType].help}</small>
           </label>
-          <details className="provider-auth" open={!!p?.auth_file}>
+          {providerType !== "steward" && <details className="provider-auth" open={!!p?.auth_file}>
             <summary>Authentication (optional)</summary>
             <label>
               Authorization file
@@ -2102,7 +2102,7 @@ function Editor({
                 credentials are reread on each scan.
               </small>
             </label>
-          </details>
+          </details>}
           <label className="checkbox-line">
             <input
               type="checkbox"
